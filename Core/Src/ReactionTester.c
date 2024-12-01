@@ -85,17 +85,18 @@ void got_stop()
 		 2.) Read the value of timer
 		 3.) Display the value
 		 */
-
+		// 1.) Stop the timer
+	
 
 	  /**************** STUDENT TO FILL IN START HERE ********************/
       // 1.) Stop the random timer // Random timer is timer3
-			HAL_TIM_Base_Stop(&htim3);
+		HAL_TIM_Base_Stop(&htim3);
+		
       // 2.) Read the value of the timer -- this step provided
 		last_reaction_time_in_millisec = __HAL_TIM_GetCounter(&htim3) / 10; // Why is it divide by 10?
 
 	  // 3.) Display the value
 		MultiFunctionShield_Display(last_reaction_time_in_millisec);
-
 
       /**************** STUDENT TO FILL IN END HERE ********************/
 		// Keep the best time in a global variable
@@ -113,4 +114,5 @@ void got_fastest()
 		got_fastest_button = false;
 		MultiFunctionShield_Display(best_reaction_time_in_millisec);
 		}
+
 

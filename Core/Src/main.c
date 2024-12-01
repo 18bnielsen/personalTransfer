@@ -122,6 +122,7 @@ int main(void)
   MX_TIM6_Init();
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
+  
 
   // Start timer
   HAL_TIM_Base_Start_IT(&htim17);  // LED SevenSeg cycle thru them   DONT CHANGE
@@ -130,9 +131,9 @@ int main(void)
   /************  STUDENT TO FILL IN HERE START *********************/
 
     // Add your Timer Start for LED-D2 HERE
-  	HAL_TIM_Base_Start_IT(&htim6);  // LED-D2 toggle according to Timer6
+    HAL_TIM_Base_Start_IT(&htim6);
     // Add your Timer Start for LED-D3 HERE
-  	HAL_TIM_Base_Start_IT(&htim7);  // LED-D3 toggle according to Timer7
+    HAL_TIM_Base_Start_IT(&htim7);
 
   /************  STUDENT TO FILL IN HERE END   *********************/
 
@@ -580,14 +581,18 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
 
   /**************** STUDENT TO FILL IN START HERE ********************/
-  if (htim == &htim6 )
+  /*   See example above where the htim
+   *   Need to put in the code to toggle D2 and D3 when their respective timers have expired
+   *
+   */
+   if (htim == &htim6 )
     {
   	HAL_GPIO_TogglePin(LED_D2_GPIO_Port, LED_D2_Pin);
     }
   if (htim == &htim7 )
-      {
-    	HAL_GPIO_TogglePin(LED_D3_GPIO_Port, LED_D3_Pin);
-      }
+    {
+    HAL_GPIO_TogglePin(LED_D3_GPIO_Port, LED_D3_Pin);
+    }
   /**************** STUDENT TO FILL IN END HERE ********************/
 
 
