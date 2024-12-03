@@ -5,7 +5,6 @@
 *.o
 *.ko
 *.obj
-*.elf
 *.cyclo
 
 # Linker output
@@ -53,7 +52,6 @@ Mkfile.old
 dkms.conf
 .settings/language.settings.xml
 *.o
-*.elf
 *.list
 *.o
 *.o
@@ -62,11 +60,8 @@ Debug/makefile
 Debug/Core/Src/main.cyclo
 *.o
 *.su
-*.elf
 *.list
 *.map
 
 .settings/**
 Debug/**
-Documentation/~$EN-361-Lab-02--STM32 Clocks, Timers, and Interrupts.docx
-/Debug/

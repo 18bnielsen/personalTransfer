@@ -13,17 +13,30 @@
   * in the root directory of this software component.
   * If no LICENSE file comes with this software, it is provided AS-IS.
   *
+  *
+  *
+  ******************************************************************************
+  * @copyright	BYU-Idaho
+  * @date		2023
+  * @version	F23
+  * @note		For course ECEN-361
+  * @author		Lynn Watson
+  ******************************************************************************
+  *
+  * Student should only modify code between
+  ************** STUDENT EDITABLE HERE STARTS HERE *****
+  ************** STUDENT EDITABLE HERE ENDS HERE *******
+  *
   ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "MultiFunctionShield.h"
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdbool.h>
 
 /* USER CODE END Includes */
@@ -35,7 +48,11 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define D1_time 250
+#define D2_time D1_time * 4
+#define D3_time D2_time * 2
+#define D4_time D3_time * 2
+#define count_time 4000
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -44,18 +61,18 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-TIM_HandleTypeDef htim3;
-TIM_HandleTypeDef htim6;
-TIM_HandleTypeDef htim7;
-TIM_HandleTypeDef htim16;
 TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart2;
 
+/* Definitions for defaultTask */
+osThreadId_t defaultTaskHandle;
+const osThreadAttr_t defaultTask_attributes = {
+  .name = "defaultTask",
+  .stack_size = 128 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
 /* USER CODE BEGIN PV */
-bool got_start_button = false;
-bool got_stop_button = false;
-bool got_fastest_button = false;
 
 /* USER CODE END PV */
 
@@ -64,20 +81,26 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM17_Init(void);
-static void MX_TIM16_Init(void);
-static void MX_TIM3_Init(void);
-static void MX_TIM6_Init(void);
-static void MX_TIM7_Init(void);
-/* USER CODE BEGIN PFP */
-/* Private function prototypes -----------------------------------------------*/
-#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+void StartDefaultTask(void *argument);
 
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
-void show_a_random_number(void);
-void got_start(void);
-void got_stop(void);
-void got_fastest(void);
-int best_reaction_time_in_millisec = 99999;  //Start with something easy to beat
+/* USER CODE BEGIN PFP */
+
+/*************  Task-Creation-Part-A ******************/
+/******** put any addtional task declarations in here ***********/
+void D2_Task(void *argument);// This is the default task working at the beginning of the lab
+
+
+/************** STUDENT EDITABLE HERE STARTS HERE *****/
+ //    You'll want to make your own private function prototypes for the other tasks you're adding:
+void D2_Task2(void *argument);    //second D2 blink task
+void D3_Task(void *argument);     //D3 blink task
+void D4_Task(void *argument);     //D4 blink task
+void Sev_Seg_Task(void *argument);		//7-segment counting task
+
+
+ /************** STUDENT EDITABLE HERE ENDS HERE *******
+ */
+
 
 /* USER CODE END PFP */
 
@@ -93,6 +116,7 @@ int best_reaction_time_in_millisec = 99999;  //Start with something easy to beat
 int main(void)
 {
   /* USER CODE BEGIN 1 */
+  // TaskHandle_t xHandle = NULL;
 
   /* USER CODE END 1 */
 
@@ -102,7 +126,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
 
   /* USER CODE END Init */
 
@@ -117,55 +140,89 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_TIM17_Init();
-  MX_TIM16_Init();
-  MX_TIM3_Init();
-  MX_TIM6_Init();
-  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
-  
-
-  // Start timer
-  HAL_TIM_Base_Start_IT(&htim17);  // LED SevenSeg cycle thru them   DONT CHANGE
-  HAL_TIM_Base_Start_IT(&htim16);  // LED-D1 toggle according to Timer16   DONT CHANGE
-
-  /************  STUDENT TO FILL IN HERE START *********************/
-
-    // Add your Timer Start for LED-D2 HERE
-    HAL_TIM_Base_Start_IT(&htim6);
-    // Add your Timer Start for LED-D3 HERE
-    HAL_TIM_Base_Start_IT(&htim7);
-
-  /************  STUDENT TO FILL IN HERE END   *********************/
-
-
-
   MultiFunctionShield_Clear();
+  Clear_LEDs();	// Note that D1 is never quite off because the Nucleo Board Built in LED
+  HAL_TIM_Base_Start_IT(&htim17);  // LED SevenSeg cycle thru them
   /* USER CODE END 2 */
 
+  /* Init scheduler */
+  osKernelInitialize();
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* creation of defaultTask */
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /*
+   *************  Task-Creation-Part-C *****************
+   *
+   * Here's where the task ("thread")  gets put into the scheduler Queue
+   */
+
+
+	//xTaskCreate(D2_Task,
+				//"D2_Blink",        /* Text name for the task. */
+	            //1000,      /* Stack size in words, not bytes. */
+	            //( void * ) 1,    /* Parameter passed into the task. */
+				//tskIDLE_PRIORITY,/* Priority at which the task is created. */
+	            //&xHandle );
+
+	osThreadNew(D2_Task, "D2 Blink", &defaultTask_attributes);	// This launches the
+	/*
+	 *
+     ************** STUDENT EDITABLE HERE STARTS HERE *****/
+     //  Task-Creation-Part-C *****************
+     //  Here's where the task gets launched into the OS queue of tasks
+     //  See the above one for the D2_Task
+	osThreadNew(D2_Task2, "D2 Blink2", &defaultTask_attributes);
+	osThreadNew(D3_Task, "D3 Blink", &defaultTask_attributes);
+	osThreadNew(D4_Task, "D4 Blink", &defaultTask_attributes);
+	osThreadNew(Sev_Seg_Task, "7Seg Count", &defaultTask_attributes);
+
+
+	 /************** STUDENT EDITABLE HERE ENDS HERE *******
+	 */
+
+
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* USER CODE BEGIN RTOS_EVENTS */
+  /* add events, ... */
+	MultiFunctionShield_Display (4444);  // Lab-04 -- show all 4444's to start
+
+  /* USER CODE END RTOS_EVENTS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  Clear_LEDs();
-  printf("\033\143");  // clear the terminal before printing
-  printf("Hello Lab-2 -- Timers and Interrupts \n\r\n\r");
-  srand((unsigned) uwTick );
-
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	// show_a_random_number();
-	  while (!got_start_button);
-	  got_start();
-	  got_start_button = false;
-	  while (!got_stop_button);
-	  got_stop();
-	  got_stop_button = false;
-	  MX_TIM3_Init();   // reset the reaction timer
-	// Display_Waiting();
 
-
-	}
+  }
   /* USER CODE END 3 */
 }
 
@@ -216,159 +273,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief TIM3 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM3_Init(void)
-{
-
-  /* USER CODE BEGIN TIM3_Init 0 */
-
-  /* USER CODE END TIM3_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM3_Init 1 */
-
-  /* USER CODE END TIM3_Init 1 */
-  htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 8000-1;
-  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
-  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM3_Init 2 */
-
-  /* USER CODE END TIM3_Init 2 */
-
-}
-
-/**
-  * @brief TIM6 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM6_Init(void)
-{
-
-  /* USER CODE BEGIN TIM6_Init 0 */
-
-  /* USER CODE END TIM6_Init 0 */
-
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM6_Init 1 */
-
-  /* USER CODE END TIM6_Init 1 */
-  htim6.Instance = TIM6;
-  htim6.Init.Prescaler = 4000-1;
-  htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 10000;
-  htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim6, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM6_Init 2 */
-
-  /* USER CODE END TIM6_Init 2 */
-
-}
-
-/**
-  * @brief TIM7 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM7_Init(void)
-{
-
-  /* USER CODE BEGIN TIM7_Init 0 */
-
-  /* USER CODE END TIM7_Init 0 */
-
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-  /* USER CODE BEGIN TIM7_Init 1 */
-
-  /* USER CODE END TIM7_Init 1 */
-  htim7.Instance = TIM7;
-  htim7.Init.Prescaler = 2000-1;
-  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim7.Init.Period = 10000;
-  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM7_Init 2 */
-
-  /* USER CODE END TIM7_Init 2 */
-
-}
-
-/**
-  * @brief TIM16 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM16_Init(void)
-{
-
-  /* USER CODE BEGIN TIM16_Init 0 */
-
-  /* USER CODE END TIM16_Init 0 */
-
-  /* USER CODE BEGIN TIM16_Init 1 */
-
-  /* USER CODE END TIM16_Init 1 */
-  htim16.Instance = TIM16;
-  htim16.Init.Prescaler = 8000 -1;
-  htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim16.Init.Period = 10000;
-  htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim16.Init.RepetitionCounter = 0;
-  htim16.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim16) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM16_Init 2 */
-
-  /* USER CODE END TIM16_Init 2 */
-
 }
 
 /**
@@ -456,8 +360,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LED_D1_Pin|LED_D2_Pin|LED_D3_Pin|SevenSeg_CLK_Pin
-                          |SevenSeg_DATA_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED_D1_GPIO_Port, LED_D1_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, LED_D2_Pin|LED_D3_Pin|SevenSeg_CLK_Pin|SevenSeg_DATA_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, SevenSeg_LATCH_Pin|LED_D4_Pin, GPIO_PIN_RESET);
@@ -486,12 +392,17 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LED_D1_Pin LED_D2_Pin LED_D3_Pin SevenSeg_CLK_Pin
-                           SevenSeg_DATA_Pin */
-  GPIO_InitStruct.Pin = LED_D1_Pin|LED_D2_Pin|LED_D3_Pin|SevenSeg_CLK_Pin
-                          |SevenSeg_DATA_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  /*Configure GPIO pin : LED_D1_Pin */
+  GPIO_InitStruct.Pin = LED_D1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  HAL_GPIO_Init(LED_D1_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : LED_D2_Pin LED_D3_Pin */
+  GPIO_InitStruct.Pin = LED_D2_Pin|LED_D3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
@@ -501,21 +412,35 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(Button_3_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SevenSeg_LATCH_Pin LED_D4_Pin */
-  GPIO_InitStruct.Pin = SevenSeg_LATCH_Pin|LED_D4_Pin;
+  /*Configure GPIO pins : SevenSeg_CLK_Pin SevenSeg_DATA_Pin */
+  GPIO_InitStruct.Pin = SevenSeg_CLK_Pin|SevenSeg_DATA_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SevenSeg_LATCH_Pin */
+  GPIO_InitStruct.Pin = SevenSeg_LATCH_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(SevenSeg_LATCH_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : LED_D4_Pin */
+  GPIO_InitStruct.Pin = LED_D4_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LED_D4_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI4_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI4_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -524,81 +449,97 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-
-/**
-  * @brief  Retargets the C library printf function to the USART.
-  * @param  None
-  * @retval None
-  */
-PUTCHAR_PROTOTYPE
-{
-  /* Place your implementation of fputc here */
-  /* e.g. write a character to the USART1 and Loop until the end of transmission */
-  HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
-
-  return ch;
-}
-
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-	{
-	// All three buttons generate GPIO interrupts
-	// Don't spend much time in the ISR because there are other interrupts happening
-	switch(GPIO_Pin)
-	{
-	case Button_1_Pin:
-		got_start_button = true;
-		break;
-	case Button_2_Pin:
-		got_stop_button = true;
-		break;
-	case Button_3_Pin:
-		// Here's the code for the Show Fastest button --
-		got_fastest_button = true;
-		MultiFunctionShield_Display(best_reaction_time_in_millisec);
-		break;
-	default:
-      __NOP();
-	}
-}
-
-
-
-
-
 // Callback: timer has rolled over
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 // Check which version of the timer triggered this callback and toggle the right LED
-  if (htim == &htim16 )
-  {
-	HAL_GPIO_TogglePin(LED_D1_GPIO_Port, LED_D1_Pin);
-  }
 /** This timer has to be here to cycle thru the 7-Seg LED displays **/
   if (htim == &htim17 )
   {
 	  MultiFunctionShield__ISRFunc();
   }
-
-  /**************** STUDENT TO FILL IN START HERE ********************/
-  /*   See example above where the htim
-   *   Need to put in the code to toggle D2 and D3 when their respective timers have expired
-   *
-   */
-   if (htim == &htim6 )
-    {
-  	HAL_GPIO_TogglePin(LED_D2_GPIO_Port, LED_D2_Pin);
-    }
-  if (htim == &htim7 )
-    {
-    HAL_GPIO_TogglePin(LED_D3_GPIO_Port, LED_D3_Pin);
-    }
-  /**************** STUDENT TO FILL IN END HERE ********************/
-
-
 }
 
+
+
+
+
+
+
+
+	/*
+     ************  Task-Creation-Part-B *****************
+    */
+	void D2_Task(void *argument)
+		{ while(true)
+			{ HAL_GPIO_TogglePin(LED_D2_GPIO_Port,LED_D2_Pin);
+			  osDelay(D2_time);
+			}
+		}
+
+    /************** STUDENT EDITABLE HERE STARTS HERE *****/
+
+     //Here's where the definition of the task (the 'callback') gets made
+     //See the above one for the D2_Task
+     //Put definition of other tasks here
+
+	void D2_Task2(void *argument)//second D2 blink task
+		{ while(true)
+			{ HAL_GPIO_TogglePin(LED_D2_GPIO_Port,LED_D2_Pin);
+				 osDelay(500);
+			}
+		}
+	void D3_Task(void *argument)  //D3 blink task
+		{ while(true)
+			{ HAL_GPIO_TogglePin(LED_D3_GPIO_Port,LED_D3_Pin);
+				osDelay(250);
+			}
+		}
+	void D4_Task(void *argument)  //D4 blink task
+		{ while(true)
+			{ HAL_GPIO_TogglePin(LED_D4_GPIO_Port,LED_D4_Pin);
+			    osDelay(125);
+			}
+		}
+	void Sev_Seg_Task(void *argument)
+		{int seg_count = 0;
+		while(true)
+
+			{ MultiFunctionShield_Display(seg_count);
+				osDelay(1500);
+				seg_count = seg_count + 1;
+			}
+
+		}
+
+     /************** STUDENT EDITABLE HERE ENDS HERE *******
+     */
+
+
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartDefaultTask */
+/**
+  * @brief  Function implementing the defaultTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartDefaultTask */
+void StartDefaultTask(void *argument)
+{
+  /* USER CODE BEGIN 5 */
+/* This task is created automatically and can't be deleted
+*/
+/* Infinite loop */
+  for(;;)
+  {
+  HAL_GPIO_WritePin(LED_D1_GPIO_Port,LED_D1_Pin,1); //Active low on the multiboard
+  osDelay(D1_time);
+  }
+  // If we goof, exit gracefully
+  osThreadTerminate(NULL);
+  /* USER CODE END 5 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.

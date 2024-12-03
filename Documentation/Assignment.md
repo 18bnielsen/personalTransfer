@@ -1,138 +1,111 @@
-# ECEN-361 Lab-02: Clocks, Timers, and Interrupts
+# ECEN-361 Lab-04:FreeRTOS & Multi-tasking
 
-     Student Name:  Bryan Nielsen
+     Student Name:  Brandon Rico
 
 ## Introduction and Objective of the Lab
 
-The objectives of this lab are as follows:
+In Lab-02, we saw how individual counter blocks could initiate tasks and work like a multi-tasking system. Each timer block would produce an interrupt, launch the task, then re-start its count. In “parallel” we had
 
-- Part 1: Load the LED-D1 Blinky working with a simple timer-based interrupt. Add two more timers to blink LED_D2 and LED_D3 with differing rates.
+- 3 different LEDs blinking
+- A timer cycling thru, displaying each of the Seven-Segment display digits.
+- Random Reaction Timer counting
+- A response-timer keeping track of how long till a button was pressed.
+- A serial port timer sending UART data to the USB-COM: port.
 
-- Part 2: Reconfigure the timer clock to see the effects of changing the clock source and parameters.
+While this operated like a multi-tasking system, the reality is that there were very strict limitations and flexibility to this system. Our Nucleo was running out of timer blocks, there was no controlled/shared memory, interrupts had to planned such they were never “nested,” etc. This brute force approach is not scalable.
 
-- Part 3: Use a built-in timer to count the time of an external event (button push). This will be done with a fun Reaction timer.
+In Lab-03 we examined a simple approach to looking at how to launch multiple jobs per a scheduler.
 
-For each of the parts, follow the instructions, then fill in answers to the questions. Expected answers are indicated in brackets like this: \[*answer here*]. Replace the bracketed text with your answer.
+Our next step is to implement a true, commercial-grade RTOS, which gives us all the infrastructure needed to implement multi-tasking. Instead of using multiple counters/timers/interrupts, we will now let the RTOS manage task swapping, memory management, and all else, based on a single timer: SYSTICK.
 
-The submission for this lab is simply the repository that you’ll modify. Your modifications get pushed back to github.com. Your responses, as recorded in this file, will be checked along with your running project.
+FreeRTOS will be the RTOS of choice for this class. The benefits and reasons for this system are reviewed in class, and it is supported directly with the STM32CubeIDE that we use. This lab will be the first use of FreeRTOS in our labs and has the following objectives:
 
-## Part 1: Adding LEDs to Blinky Application
+* **Part 1:** Introduction of FreeRTOS with a process-based ‘blinky’ project.
 
-1. Import with File/Import and point to the directory of the newly cloned project
+* **Part 2:** Creation of tasks to do the same things we did in Lab-02, but with processes controlled by FreeRTOS instead of setting-up and controlling all the timers.
 
-2. Clean and build the project:
+For each of the parts, follow the instructions, then fill in answers to the questions. Expected answers are indicated with "[*answer here*]".
 
-![A screenshot of a computer Description automatically generated](media/7285d1532121002c72aa9e000c8f282b.png)
+## Lab Instructions
 
-        There should be no errors or warnings.
+### Part 1.1: Starting with the YT-based, add the MultiBoard into the project
 
-3. Run the project.
+Before the lab, you should’ve followed the instructions for the Pre-lab-4 Exam, and built a ‘blinky’ that runs from FreeRTOS.
+
+With that project working, power-down the Nucleo, add on the multi-function shield, and start your FreeRTOS blinky again.
+
+### Part 1.2: Questions (2pts)
+
+* Which light blinks on the multiboard (i.e., Dx)?
+  
+  * The D1 LED
+
+* Are the multiboard LED and main Nucleo LED in sync with one another (i.e., do they turn on and off at the same time with same logic)? Why or why not?
+  
+  * No, the LED on the multiboard has the opposite logic as the LED on the Nucleo board. This might be because one of the LEDs started on and the other started off.
+
+Finally, locate the process in the code where the on-board light is toggled. Look for:
+
+**HAL_GPIO_TogglePin(GPIOA,GPIO_PIN_5);**
+
+**osDelay(2000);**
+
+With the MultiFunction Board in place, change that line to toggle the LED D4 instead:
+
+**HAL_GPIO_TogglePin(LED_D4_GPIO_Port,LED_D4);**
+
+### Part 2.1: Using the Multi-Board and Launching other FreeRTOS tasks
+
+Now, import this lab's project into your workspace with File/Import and point to the directory of the this lab project.
+
+Clean and build the project and observer that there are no errors or warnings.
+
+Run the project and observe that the D2_LED blinks at 1 Hz (once per second).
+
+*Note that the D1_LED is not being used because it is tied to the built-in user LED on the STM32 board. These two are in conflict with one board treating it as active-high, and the other as active-low. So, D1_LED is unused.*
+
+There is no seven-segment display.
+
+#### Task: Create 3 more blinking events with tasks (no interrupts or timer blocks this time) (3 pts)
+
+Note that to add a new task in FreeRTOS, three things have to be coded. These are labelled with comments in “main.c” as “Task-Part-A,” “Task-Part-B,” and “Task-Part-C”. As they are discussed below – find these comments in the code for reference.
+
+1. `/******* Task-Creation-Part-A *********/`
    
-   * The project should simply blink the D1_LED once per second.
+   * Declare a prototype for the function (this is a requirement for the C-compiler to link)
+
+2. `/******* Task-Creation-Part-B *********/`
    
-   * No seven-segment display.
+   * Write the task process itself
 
-### Add 2 more timer interrupts that blink LEDs
-
-* D2_LED: Once every 500 mS.
-
-* D3_LED: Once every 250 mS.
-
-Do this by using the GUI (click on the MX -- .ioc file). Note that two of the timers are already taken:
-
-- DON’T USE TIM17 – it’s dedicated to displaying the seven-segment lights
-- DON’T’USE TIM16 – Note that it’s doing D1 at 1 second.
-
-Note that a few things have to happen to make a timer-based interrupt work:
-
-1. The interrupt **must** be enabled in the NVIC settings in the configuration.
-
-2. Timer has to be initialized (this code is generated by the GUI – see   
-   **MX_TIM17_Init();**
-
-3. Timer has to be started – You put this in main.c see:   
-   **HAL_TIM_Base_Start_IT(&htim17);**
-
-4. ISR has to be defined -- You put this in main.c see:
+3. `/******* Task-Creation-Part-C *********/`
    
-   **HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef \*htim)**
+   * Launch the task by putting it in the scheduling queue
 
-**Safety tip:**
-Note that with the GUI-generated source-codes, anything the USER (you) change that is NOT between the comment sections indicators:
+Note that the “StartDefaultTask “ is required when the system is built. That task currently blinks the D1_LED at 1000mS. Using the single task in the code as a prototype (“StartDefaultTask”), create three more tasks that blink:
 
-```c
-    /* USER CODE BEGIN x*/
-    /* USER CODE END   x */
-```
-can be **ERASED**.
+* D2_LED: Once every 500 mS
+* D3_LED: Once every 250 mS
+* D4_LED: Once every 125 mS
 
-Any modifications you make should *ALWAYS* between these section headers.
+## Part 2.2: Seven Segment Display Counter (5pts)
 
-## Part 1 Questions (2 pts)
+Now add one final task that display a counter on the Seven-Segment LED display. Count up from 0, and increment the count once per 1500 mS.
 
-Note the speed of D1/D2/D3 – they should seem like a 3-bit binary counter.
+## Extra Credit Ideas (5 pts maximum)
 
-Once you have all three LEDs blinking properly, answer the following questions:
+* Stop one of the LED processes when the digit count gets to 20. Explain how you did it. Did you use a global variable? Or read about and use the oSSuspend task API?
+  
+  * [*answer here*]
 
-1. How fast does D1 turn on/off? [*1 second*]
+* Explore the differences between the two “delay” calls: HAL_Delay and OsDelay
+  
+  * [*answer here*]
 
-2. Do all LEDs toggle at *exactly* the same time? [*No but it is so quick that we can't notice the difference*]
+* Eliminate the SevenSegment refresh routine, currently based off timer17, so that it refreshs like any other process to give the appearance of all 4 digits being turned on at the same time. Explain what you did.
+  
+  * [*answer here*]
 
-## Part 2: Changing the clock tree
-
-Change the clock tree to adjust the rates at which the LEDs blink.
-
-1. Open the ioc Configuration GUI
-2. Change the APB1 and ABP2-Prescalers to “/8” (Changing both of them guarantees that whatever timer you chose will be affected.)
-
-![A computer screen shot of a diagram Description automatically generated](media/a1a4a08f8ac2f1b714fa0a5456b5e07e.png)
-
-3. Compile and re-run and observe the behavior of the LEDs
-
-## Part 2 Questions (3 pts)
-
-1. What has happened to the speed of the timers? [*It is divided by 8 making it decrease*]
-
-2. What is the new frequency of LED D1? [*0.2 Hz or 5 seconds*]
-
-3. When we changed the frequency, did the Seven-Segment Light update rate change?  (hint, look at the clocks driving the APB1, APB2 buses and which timers are on which bus.  Recall that the Seven-Segment timer is Tim17)
- [*Yes, because we decreased the frequency and it only changes as fast as the frequency*]
-
-## Part 3: Reaction Timer (5 pts)
-
-In addition to performing useful tasks at set intervals, timers can also be used to measure elapsed time of an event. The events can be triggered by software, or by a hardware input.
-
-For this part of the lab, we’ll make a small “reaction timer” that measures how fast your hand/eye coordination can be, in milliseconds.
-
-We’ll define the buttons and display as shown:
-
-![](media/2b43c113169efb48ce00225bd55358ff.png)
-
-* **START button (S1):** Initiates a random wait. After the random wait, all the SevenSeg lights go on. As soon as the lights go on, a timer starts counting milliseconds
-
-* **STOP button (S2):** Stops the millisecond reaction timer and shows it on the display
-
-* **FASTEST button (S3):** Extra Credit – This button shows the fastest speed.
-
-Code for this part is organized in the **ReactionTester.c** source file and **main.c**. Fill in between the comments:
-
-```c
-/* Student Start HERE */
-
-/* Student End HERE */
-```
-
-Read thru the comments in the code. Most of the structure is in place, and you should only have to modify places between Student_Start / Student_End.
-
-Note that for the reaction timer to be accurate, because you changed the prescaler above in Part2, you’ll need to reset it back to the default of no-prescale, x1. 
-
-## Extra-Credit (5pts maximum)
-
-* In the current code, there’s no penalty for “Cheating” by pushing the stop button before all the “Go” lights turn on.  Implement some sort of indicator that the
-  Stop button was pushed prematurely.
-
-* Change the “Go” lights to be all of the D1..4 LEDs instead of display all ‘8888’ on the SevenSegments.
-
-* Make the final reaction time flash on/off
-
-If you do any of these items – just mention what and how it worked, [*here*].
+* Use one of the push buttons from an earlier lab to set up an interrupt such that it doubles the count frequency of the 7-Segment LED counter to go faster and faster.   Explain how you did it.
+  
+  * [*answer here*]

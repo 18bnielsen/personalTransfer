@@ -1,6 +1,5 @@
 /* USER CODE BEGIN Header */
 /**
- *
   ******************************************************************************
   * @file           : main.h
   * @brief          : Header for main.c file.
@@ -8,11 +7,8 @@
   ******************************************************************************
   * @attention
   *
-  *
-  * Copyright (c) 2023 BYU-Idaho   ECEN Dept
-  * Author Lynn Watson
-  *
-  * Note that most of this comes from the CubeMX make.
+  * Copyright (c) 2023 STMicroelectronics.
+  * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
   * in the root directory of this software component.
@@ -45,7 +41,6 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
-/*  User can set this for the reaction timer */
 
 /* USER CODE END EC */
 
@@ -62,7 +57,6 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define reaction_timer 1
 #define B1_Pin GPIO_PIN_13
 #define B1_GPIO_Port GPIOC
 #define LM35_IN_Pin GPIO_PIN_1
