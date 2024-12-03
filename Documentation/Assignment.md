@@ -1,6 +1,6 @@
 # ECEN-361 Lab-04:FreeRTOS & Multi-tasking
 
-     Student Name:  Brandon Rico
+     Student Name:  Bryan Nielsen
 
 ## Introduction and Objective of the Lab
 
@@ -38,11 +38,11 @@ With that project working, power-down the Nucleo, add on the multi-function shie
 
 * Which light blinks on the multiboard (i.e., Dx)?
   
-  * The D1 LED
+  * [*D1*]
 
 * Are the multiboard LED and main Nucleo LED in sync with one another (i.e., do they turn on and off at the same time with same logic)? Why or why not?
   
-  * No, the LED on the multiboard has the opposite logic as the LED on the Nucleo board. This might be because one of the LEDs started on and the other started off.
+  * [No they do not, they are opposite logic from each other. This is because they have opposite setup logic values]
 
 Finally, locate the process in the code where the on-board light is toggled. Look for:
 

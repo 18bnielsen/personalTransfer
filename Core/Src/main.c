@@ -87,15 +87,18 @@ void StartDefaultTask(void *argument);
 
 /*************  Task-Creation-Part-A ******************/
 /******** put any addtional task declarations in here ***********/
-void D2_Task(void *argument);// This is the default task working at the beginning of the lab
+void D2_Task(void *argument);		// This is the default task working at the beginning of the lab
 
 
 /************** STUDENT EDITABLE HERE STARTS HERE *****/
  //    You'll want to make your own private function prototypes for the other tasks you're adding:
-void D2_Task2(void *argument);    //second D2 blink task
-void D3_Task(void *argument);     //D3 blink task
-void D4_Task(void *argument);     //D4 blink task
-void Sev_Seg_Task(void *argument);		//7-segment counting task
+ //    D3 blink task
+ //    D4 blink task
+ //    7-segment counting task
+void D2_Task2(void *argument);
+void D3_Task(void *argument);
+void D4_Task(void *argument);
+void Sev_Seg_Task(void *argument);
 
 
  /************** STUDENT EDITABLE HERE ENDS HERE *******
@@ -117,7 +120,6 @@ int main(void)
 {
   /* USER CODE BEGIN 1 */
   // TaskHandle_t xHandle = NULL;
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -187,17 +189,18 @@ int main(void)
 	osThreadNew(D2_Task, "D2 Blink", &defaultTask_attributes);	// This launches the
 	/*
 	 *
-     ************** STUDENT EDITABLE HERE STARTS HERE *****/
+      ************** STUDENT EDITABLE HERE STARTS HERE *****/
      //  Task-Creation-Part-C *****************
      //  Here's where the task gets launched into the OS queue of tasks
      //  See the above one for the D2_Task
-	osThreadNew(D2_Task2, "D2 Blink2", &defaultTask_attributes);
-	osThreadNew(D3_Task, "D3 Blink", &defaultTask_attributes);
-	osThreadNew(D4_Task, "D4 Blink", &defaultTask_attributes);
-	osThreadNew(Sev_Seg_Task, "7Seg Count", &defaultTask_attributes);
+    osThreadNew(D2_Task2, "D2 Blink2", &defaultTask_attributes);
+    osThreadNew(D3_Task, "D3 Blink", &defaultTask_attributes);
+    osThreadNew(D4_Task, "D4 Blink", &defaultTask_attributes);
+    osThreadNew(Sev_Seg_Task, "7Seg Count", &defaultTask_attributes);
 
 
-	 /************** STUDENT EDITABLE HERE ENDS HERE *******
+
+	 ************** STUDENT EDITABLE HERE ENDS HERE *******
 	 */
 
 
@@ -477,11 +480,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			}
 		}
 
-    /************** STUDENT EDITABLE HERE STARTS HERE *****/
+  /************** STUDENT EDITABLE HERE STARTS HERE *****/
 
-     //Here's where the definition of the task (the 'callback') gets made
-     //See the above one for the D2_Task
-     //Put definition of other tasks here
+  //Here's where the definition of the task (the 'callback') gets made
+  //See the above one for the D2_Task
+  //Put definition of other tasks here
 
 	void D2_Task2(void *argument)//second D2 blink task
 		{ while(true)
@@ -511,7 +514,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			}
 
 		}
-
      /************** STUDENT EDITABLE HERE ENDS HERE *******
      */
 
