@@ -9,3 +9,9 @@ void Display_Waiting(void);
 void Display_All(void);
 void OneSecond_Show_Potentiometer__ISRFunc(void);
 void Clear_LEDs(void);
+void UART_String(char* stringOut);
+uint16_t Poll_POT_ADC_Value(void);
+void set_Decimal_Point (int position);
+void disp_adc_on_7seg(float inValue);
+void MultiFunctionShield_Display_PWM(int16_t duty_cycle_percent);
+

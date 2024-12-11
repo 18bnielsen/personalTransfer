@@ -1,111 +1,125 @@
-# ECEN-361 Lab-04:FreeRTOS & Multi-tasking
+# ECEN-361 Lab-06:ADC, PWM, and DAC
 
-     Student Name:  Bryan Nielsen
+     Student Name:  Brandon Rico
 
-## Introduction and Objective of the Lab
+## Introduction and Objectives of the Lab
 
-In Lab-02, we saw how individual counter blocks could initiate tasks and work like a multi-tasking system. Each timer block would produce an interrupt, launch the task, then re-start its count. In “parallel” we had
+This project will reinforce the learned concepts in analog-to-digital conversion (ADC), digital-to-analog conversion (DAC) and pulse-width-modulation (PWM), a form of digital-to-analog output. Each of these functions are supported on most µControllers and will be demonstrated with the STM32-Nucleo board.
 
-- 3 different LEDs blinking
-- A timer cycling thru, displaying each of the Seven-Segment display digits.
-- Random Reaction Timer counting
-- A response-timer keeping track of how long till a button was pressed.
-- A serial port timer sending UART data to the USB-COM: port.
+- Part 1: Reading an analog input, from 0V-5V, and displaying it on the seven-segment display.
+- Part 2: Become familiar with a logic analyzer, capture & decoding capabilities.
 
-While this operated like a multi-tasking system, the reality is that there were very strict limitations and flexibility to this system. Our Nucleo was running out of timer blocks, there was no controlled/shared memory, interrupts had to planned such they were never “nested,” etc. This brute force approach is not scalable.
+Other key parts of this lab include:
 
-In Lab-03 we examined a simple approach to looking at how to launch multiple jobs per a scheduler.
+- Using FreeRTOS to multi-task on ADC and PWM resources
+- Understanding the role of timers in PWM and duty-cycle modification.
+- Measuring
 
-Our next step is to implement a true, commercial-grade RTOS, which gives us all the infrastructure needed to implement multi-tasking. Instead of using multiple counters/timers/interrupts, we will now let the RTOS manage task swapping, memory management, and all else, based on a single timer: SYSTICK.
+For each of the parts, follow the instructions, then fill in answers to the questions. Expected answers are indicated in the boxes with red text/spaces to fill in answers.
 
-FreeRTOS will be the RTOS of choice for this class. The benefits and reasons for this system are reviewed in class, and it is supported directly with the STM32CubeIDE that we use. This lab will be the first use of FreeRTOS in our labs and has the following objectives:
+![A blue circuit board with a digital display Description automatically generated](media/4886aee892a735dfea5aded41b7a2386.png)
 
-* **Part 1:** Introduction of FreeRTOS with a process-based ‘blinky’ project.
+## Overview of System
 
-* **Part 2:** Creation of tasks to do the same things we did in Lab-02, but with processes controlled by FreeRTOS instead of setting-up and controlling all the timers.
+The project, as configured in the repo, uses FreeRTOS to run the following tasks concurrently:
 
-For each of the parts, follow the instructions, then fill in answers to the questions. Expected answers are indicated with "[*answer here*]".
+- ADC conversion from the potentiometer
+- PWM cycling up/down to display varying display brightness on a LED (D4)
+- DAC cycling up/down, outputting 0V – 5V seen on a LED (D1)
 
-## Lab Instructions
+A couple of the push-buttons have been configured to aid in the diagnostic and control of these systems. Here is the definition of the buttons:
 
-### Part 1.1: Starting with the YT-based, add the MultiBoard into the project
+**Button S1: DisplayMode** (cycle from mode-to-mode with button press)
 
-Before the lab, you should’ve followed the instructions for the Pre-lab-4 Exam, and built a ‘blinky’ that runs from FreeRTOS.
+- ADC **Voltage** (0.000 – 4.999) Shows as: **d.xyz**
+- PWM **Duty Cycle Percent** (0 – 100%) Shows as: **P %%**
+- DAC 12-bit decimal value (0 – 4095) Shows as: **yyyy** (no decimal point)
 
-With that project working, power-down the Nucleo, add on the multi-function shield, and start your FreeRTOS blinky again.
+**Button S2: Start/Stop**
 
-### Part 1.2: Questions (2pts)
+Of the 3 processes, here’s how they are affected by Button S2:
 
-* Which light blinks on the multiboard (i.e., Dx)?
+- ADC Voltmeter : Not affected, will change with the POT
+- DAC Up/Down : Stops / Resumes the up-down
+- PWM : Stops/Resumes the up-down
+
+![A screenshot of a computer Description automatically generated](media/34c75ad5c2491544b5aeaf464099013c.png)
+
+The Start/Stop does not affect the **DisplayMode**. When stopped the LED_D2 blinks. Also, each time the cycles are stopped, there is diagnostic output on the TTY terminal.
+
+## Part 1: Understand the ADC, Read/Output the voltage
+
+Add the project to STM32CubeIDE, Clean/Compile/Run. Open a TTY-emulator (PuTTY or Tera-Term (Windows), screen (Mac)), and review the output on the serial emulator. The pre-built project, cloned from the repo, has three concurrent tasks running.
+
+The first one is configures the ADC to take readings from the potentiometer and display them on the 7-segment LED display as a voltage. The ADC result is sampled once a second and output on the serial/USB monitor.
+
+![](media/37ff32a89936de9a8a23a40bc796c2cb.png)
+
+As seen in the schematic, the Multifunction board has a potentiometer on it that is wired to swipe between 0V and 5V. This trim pot is blue, on the left side of the board. See the schematic in the Documentation folder.
+
+## Part 1: Questions (4 pts)
+
+* What is the minimum sample resolution (change) you can see by adjusting the potentiometer? <mark>[0.078]</mark>
+
+* Can you predict this change, given the current settings of the ADC? <mark>[Yes, you can calculate it using the following equation: Resolution = Vref/2^(number of bits), based on the math it the resolution would be 0.078125]</mark>
+
+Change the sampling accuracy of the ADC (Use the **.ioc** file & STM32 GUI), to be the maximum of 12-bit: Re-generate, build, and compile.
+
+![A screenshot of a computer Description automatically generated](media/ace9b72efa8eb14f893577f32d4124a3.png)
+
+Now predict and verify the smallest sample resolution being detected.
+
+* Can you predict this change (from the math), given the current settings of the ADC?  
   
-  * [*D1*]
+   Predicted: <mark>[0.0012207]</mark>    Actual Seen: <mark>[0.001]</mark>
 
-* Are the multiboard LED and main Nucleo LED in sync with one another (i.e., do they turn on and off at the same time with same logic)? Why or why not?
+### PWM (2 pts)
+
+Use a digital input on your logic analyzer and the DisplayMode and Start/Stop button.
+
+Measure the D4_LED output at a different duty-cycle points. The duty cycle is shown on the 7-Segment LED or the TTY terminal output when stopped.
+
+* Does the duty cycle shown match the waveform?  List the measured times  (high vs low)
   
-  * [No they do not, they are opposite logic from each other. This is because they have opposite setup logic values]
+   High Time: <mark>[1.835ms]</mark>    Low Time: <mark>[5.519]</mark>
 
-Finally, locate the process in the code where the on-board light is toggled. Look for:
+### DAC (4 pts)
 
-**HAL_GPIO_TogglePin(GPIOA,GPIO_PIN_5);**
+Use a voltmeter (or the Analog input on a Saleae Analyzer) and the DisplayMode and StartStop button.
 
-**osDelay(2000);**
+Measure a few points on the D1_LED output. Do they match with estimation shown on the 7-segment display (you can also look at the value printed on the TTY Terminal output when the cycle is stopped)?  
 
-With the MultiFunction Board in place, change that line to toggle the LED D4 instead:
+List a couple of the measurements (12-bit DAC, 5V range).
 
-**HAL_GPIO_TogglePin(LED_D4_GPIO_Port,LED_D4);**
+* Reported Voltage: <mark>[3.245]</mark>  Measured Voltage: <mark>[3.252]</mark> 
+* Reported Voltage: <mark>[4.257]</mark>  Measured Voltage: <mark>[3.252]</mark> 
+* Reported Voltage: <mark>[1.934]</mark>  Measured Voltage: <mark>[1.78]</mark> 
 
-### Part 2.1: Using the Multi-Board and Launching other FreeRTOS tasks
+In a DAC controlled LED, the LED can’t truly be dimmed to zero because the Vforward of the diode isn’t high enough to turn on the diode and use the current to generate photons.
 
-Now, import this lab's project into your workspace with File/Import and point to the directory of the this lab project.
+Using the DisplayMode button and the StartStop button, empirically determine the voltage at which the D1_LED appears to go (almost) out?   (Remember this is negative true logic).
 
-Clean and build the project and observer that there are no errors or warnings.
+* For an LED like this, which approach to ‘dimming’ makes more sense?  PWM or DAC? <mark>[PWM, makes more sense ]</mark>
 
-Run the project and observe that the D2_LED blinks at 1 Hz (once per second).
+* Would this apply to a motor?  (Think about this …) <mark>[I think a PWM would still be best for a motor, It allows for efficient control of the motors speed and it is also energy efficient.
+]</mark>
 
-*Note that the D1_LED is not being used because it is tied to the built-in user LED on the STM32 board. These two are in conflict with one board treating it as active-high, and the other as active-low. So, D1_LED is unused.*
+Which approach would work for approximating a sine-wave output? PWM or DAC? Why?  <mark>[A DAC is better suited for generating sine wave outputs. It can produce a continuous range of voltage levels, this would let us get a more accurate representation of a sine wave.]</mark>
 
-There is no seven-segment display.
+### Extra Credit (5 pts maximum)
 
-#### Task: Create 3 more blinking events with tasks (no interrupts or timer blocks this time) (3 pts)
-
-Note that to add a new task in FreeRTOS, three things have to be coded. These are labelled with comments in “main.c” as “Task-Part-A,” “Task-Part-B,” and “Task-Part-C”. As they are discussed below – find these comments in the code for reference.
-
-1. `/******* Task-Creation-Part-A *********/`
-   
-   * Declare a prototype for the function (this is a requirement for the C-compiler to link)
-
-2. `/******* Task-Creation-Part-B *********/`
-   
-   * Write the task process itself
-
-3. `/******* Task-Creation-Part-C *********/`
-   
-   * Launch the task by putting it in the scheduling queue
-
-Note that the “StartDefaultTask “ is required when the system is built. That task currently blinks the D1_LED at 1000mS. Using the single task in the code as a prototype (“StartDefaultTask”), create three more tasks that blink:
-
-* D2_LED: Once every 500 mS
-* D3_LED: Once every 250 mS
-* D4_LED: Once every 125 mS
-
-## Part 2.2: Seven Segment Display Counter (5pts)
-
-Now add one final task that display a counter on the Seven-Segment LED display. Count up from 0, and increment the count once per 1500 mS.
-
-## Extra Credit Ideas (5 pts maximum)
-
-* Stop one of the LED processes when the digit count gets to 20. Explain how you did it. Did you use a global variable? Or read about and use the oSSuspend task API?
+* This code uses the ADC in a blocking mode. Change the ADC to sample via an interrupt instead. Show some of the code changes that need to be made:
   
-  * [*answer here*]
+   <mark>[*answer here*]</mark>
 
-* Explore the differences between the two “delay” calls: HAL_Delay and OsDelay
+* What is the maximum sample rate, given the current clocking scheme, for: the least-precise (6-bit) and most precise (12-bit) conversions?
   
-  * [*answer here*]
+   <mark>[*answer here*]</mark>
 
-* Eliminate the SevenSegment refresh routine, currently based off timer17, so that it refreshs like any other process to give the appearance of all 4 digits being turned on at the same time. Explain what you did.
+* What is the maximum sample rate, given the current clocking scheme, for: the least-precise (6-bit) and most precise (12-bit) conversions?
   
-  * [*answer here*]
+   <mark>[*answer here*]</mark>
 
-* Use one of the push buttons from an earlier lab to set up an interrupt such that it doubles the count frequency of the 7-Segment LED counter to go faster and faster.   Explain how you did it.
+* The Seven-Segment display using a type of PWM by refreshing each of the four segments in turn.  As given you, it goes fast enough that it looks to be 100% brightness.  Change the parameters of the refresh Timer (Timer17) with a parameter so that the apparent intensity of this display can be dimmed.
   
-  * [*answer here*]
+   <mark>[*answer here*]</mark>

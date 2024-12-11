@@ -1,5 +1,6 @@
 /* USER CODE BEGIN Header */
 /**
+ *
   ******************************************************************************
   * @file           : main.h
   * @brief          : Header for main.c file.
@@ -7,8 +8,11 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2023 STMicroelectronics.
-  * All rights reserved.
+  *
+  * Copyright (c) 2023 BYU-Idaho   ECEN Dept
+  * Author:  Lynn Watson
+  *
+  * Note that most of this comes from the CubeMX make.
   *
   * This software is licensed under terms that can be found in the LICENSE file
   * in the root directory of this software component.
@@ -16,6 +20,8 @@
   *
   ******************************************************************************
   */
+#define       LAB_06
+
 /* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
@@ -31,6 +37,7 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+
 
 /* USER CODE END Includes */
 
@@ -49,6 +56,8 @@ extern "C" {
 
 /* USER CODE END EM */
 
+void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+
 /* Exported functions prototypes ---------------------------------------------*/
 void Error_Handler(void);
 
@@ -59,8 +68,11 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define B1_Pin GPIO_PIN_13
 #define B1_GPIO_Port GPIOC
+#define B1_EXTI_IRQn EXTI15_10_IRQn
 #define LM35_IN_Pin GPIO_PIN_1
 #define LM35_IN_GPIO_Port GPIOC
+#define Potentiometer_Pin GPIO_PIN_0
+#define Potentiometer_GPIO_Port GPIOA
 #define Button_1_Pin GPIO_PIN_1
 #define Button_1_GPIO_Port GPIOA
 #define Button_1_EXTI_IRQn EXTI1_IRQn
@@ -71,15 +83,14 @@ void Error_Handler(void);
 #define Button_2_Pin GPIO_PIN_4
 #define Button_2_GPIO_Port GPIOA
 #define Button_2_EXTI_IRQn EXTI4_IRQn
-#define LED_D1_Pin GPIO_PIN_5
-#define LED_D1_GPIO_Port GPIOA
+#define DAC2_LED_D1_Pin GPIO_PIN_5
+#define DAC2_LED_D1_GPIO_Port GPIOA
 #define LED_D2_Pin GPIO_PIN_6
 #define LED_D2_GPIO_Port GPIOA
 #define LED_D3_Pin GPIO_PIN_7
 #define LED_D3_GPIO_Port GPIOA
 #define Button_3_Pin GPIO_PIN_0
 #define Button_3_GPIO_Port GPIOB
-#define Button_3_EXTI_IRQn EXTI0_IRQn
 #define SevenSeg_CLK_Pin GPIO_PIN_8
 #define SevenSeg_CLK_GPIO_Port GPIOA
 #define SevenSeg_DATA_Pin GPIO_PIN_9
@@ -90,10 +101,11 @@ void Error_Handler(void);
 #define TCK_GPIO_Port GPIOA
 #define SevenSeg_LATCH_Pin GPIO_PIN_5
 #define SevenSeg_LATCH_GPIO_Port GPIOB
-#define LED_D4_Pin GPIO_PIN_6
-#define LED_D4_GPIO_Port GPIOB
+#define LED_D4_PWM_Pin GPIO_PIN_6
+#define LED_D4_PWM_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
+#define BUFFER_SIZE 50
 
 /* USER CODE END Private defines */
 

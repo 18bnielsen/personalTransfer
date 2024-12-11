@@ -17,6 +17,8 @@
   ******************************************************************************
   */
 #include "main.h"
+#include <stdio.h>
+#include <math.h>
 
 
 #define LSBFIRST 0
@@ -48,12 +50,15 @@ void shiftOut(	GPIO_TypeDef* dataPort,uint16_t dataPin,
 
 
 
-const uint8_t SEGMENT_MAP[] = {0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90};    // Segmente, die leuchten sollen pro Zahlwert (Low-Aktiv), & 0x7F Verknüpfen fuer Dezimalpunkt
+const uint8_t SEGMENT_MAP[] = {0xC0,0xF9,0xA4,0xB0,0x99,0x92,0x82,0xF8,0x80,0x90};    //
+// Decimal point is the MSB.  Negative true logic, so to turn on the decimal point, just AND with 0x7F
 const uint8_t SEGMENT_BLANK = 0xFF;
+const uint8_t SEGMENT_ZERO = 0xC0;
 const uint8_t SEGMENT_MINUS = 0xBF;
 const uint8_t SEGMENT_SELECT[] = {0xF1,0xF2,0xF4,0xF8};                               // Ziffernposition (gemeinsame Anode, LSB)
 volatile uint8_t ActDigit = 0;
 volatile uint8_t SEGMENT_VALUE[4];
+const uint8_t BLANK_OR_ZERO_FILL = SEGMENT_ZERO;
 
 //static MultiFunctionShield *instance;
 
@@ -83,6 +88,12 @@ void MultiFunctionShield_Single_Digit_Display (int digit, int8_t value)
 
 
 
+void set_Decimal_Point (int position)
+	{
+	/* Position should be between 1 and 4 */
+    SEGMENT_VALUE[4 - position] &= 0x7F;
+	}
+
 
 
 void MultiFunctionShield_Display (int16_t value)
@@ -96,27 +107,34 @@ void MultiFunctionShield_Display (int16_t value)
   }
   else    // possible range
   {
-    if (value >= 0)   // positive values
+    if (value > 0)   // positive values
     {
       if (value > 999)
         SEGMENT_VALUE[0] = SEGMENT_MAP [(uint8_t) (value / 1000)];
       else
-        SEGMENT_VALUE[0] = SEGMENT_BLANK;
+        SEGMENT_VALUE[0] = BLANK_OR_ZERO_FILL;
 
       if (value > 99)
         SEGMENT_VALUE[1] = SEGMENT_MAP [(uint8_t) ((value / 100) % 10)];
       else
-        SEGMENT_VALUE[1] = SEGMENT_BLANK;
+        SEGMENT_VALUE[1] = BLANK_OR_ZERO_FILL;
 
       if (value > 9)
         SEGMENT_VALUE[2] = SEGMENT_MAP [(uint8_t) ((value / 10) % 10)];
       else
-        SEGMENT_VALUE[2] = SEGMENT_BLANK;
+        SEGMENT_VALUE[2] = BLANK_OR_ZERO_FILL;
 
       SEGMENT_VALUE[3] = SEGMENT_MAP [(uint8_t) (value % 10)];
 
     }
-    if (value < 0)      // negative values: "-" left
+    else if (value == 0)   // positive values
+    {
+		SEGMENT_VALUE[0] = SEGMENT_MAP[0];
+		SEGMENT_VALUE[1] = SEGMENT_MAP[0];
+		SEGMENT_VALUE[2] = SEGMENT_MAP[0];
+		SEGMENT_VALUE[3] = SEGMENT_MAP[0];
+    }
+    else if (value < 0)      // negative values: "-" left
     {
       value *= -1;
       SEGMENT_VALUE[0] = SEGMENT_MINUS;
@@ -124,25 +142,46 @@ void MultiFunctionShield_Display (int16_t value)
       if (value > 99)
         SEGMENT_VALUE[1] = SEGMENT_MAP [(uint8_t) ((value / 100) % 10)];
       else
-        SEGMENT_VALUE[1] = SEGMENT_BLANK;
+        SEGMENT_VALUE[1] = BLANK_OR_ZERO_FILL;
 
       if (value > 9)
         SEGMENT_VALUE[2] = SEGMENT_MAP [(uint8_t) ((value / 10) % 10)];
       else
-        SEGMENT_VALUE[2] = SEGMENT_BLANK;
+        SEGMENT_VALUE[2] = BLANK_OR_ZERO_FILL;
 
       SEGMENT_VALUE[3] = SEGMENT_MAP [(uint8_t) (value % 10)];
     }
   }
 }
+void MultiFunctionShield_Display_PWM(int16_t duty_cycle_percent)
+	{
+	/* Just display the whole number then blank the top two
+	 * If it's 100% add the 1 back on
+	 */
+	MultiFunctionShield_Display(duty_cycle_percent);
+	SEGMENT_VALUE[0] = 0x8C;
+	SEGMENT_VALUE[1] = SEGMENT_BLANK;
+	if (duty_cycle_percent == 100){
+		SEGMENT_VALUE[1] = SEGMENT_MAP [1];
+		}
+	}
 
 void Clear_LEDs(void)
 {
 	  // Clear the LED lights
-  HAL_GPIO_WritePin(LED_D1_GPIO_Port, LED_D1_Pin,GPIO_PIN_SET);
-  HAL_GPIO_WritePin(LED_D2_GPIO_Port, LED_D2_Pin,GPIO_PIN_SET);
+
+
+// LAB-04 needs D1 and D3 for SPI
+#ifndef          LAB_04
   HAL_GPIO_WritePin(LED_D3_GPIO_Port, LED_D3_Pin,GPIO_PIN_SET);
+#endif
+
+  HAL_GPIO_WritePin(LED_D2_GPIO_Port, LED_D2_Pin,GPIO_PIN_SET);
+
+#ifndef          LAB_06
   HAL_GPIO_WritePin(LED_D4_GPIO_Port, LED_D4_Pin,GPIO_PIN_SET);
+  HAL_GPIO_WritePin(LED_D1_GPIO_Port, LED_D1_Pin,GPIO_PIN_SET);
+#endif
 }
 
 void MultiFunctionShield_Clear(void)
@@ -181,7 +220,29 @@ void Display_All(void)
 	MultiFunctionShield_Display(8888);
 	}
 
+void disp_adc_on_7seg(float inValue)
+	{
+	float tmpVal = (inValue < 0) ? -inValue : inValue;
+	int tmpInt1 = tmpVal;                  // Get the integer (678).
+	float tmpFrac = tmpVal - tmpInt1;      // Get fraction (0.0123).
 
+	uint8_t tenth = trunc(tmpFrac * 10.0);
+	tmpFrac = tmpFrac * 10 - tenth;
+	uint8_t hundredth = ((int) trunc(tmpFrac * 10)) ;
+	tmpFrac = tmpFrac * 10 - hundredth;
+	uint8_t thousandth = ((int) trunc(tmpFrac * 10)) ;
+	/*
+	 * sprintf isn't safe for threading, so just put the value directly on the LEDs
+	 * The format will always be
+	 * x.yyy  always positive
+	 * always a single digit
+	 *
+	 */
+	int to_disp = (tmpInt1 * 1000) + (tenth *100) + (hundredth * 10) + thousandth;
+	MultiFunctionShield_Display(to_disp);
+	set_Decimal_Point(4);
+
+	}
 
 
 
@@ -202,3 +263,4 @@ ISR(TIMER1_COMPA_vect)
   instance->ISRFunc();
 }
 */
+

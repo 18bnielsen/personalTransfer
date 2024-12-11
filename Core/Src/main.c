@@ -13,20 +13,6 @@
   * in the root directory of this software component.
   * If no LICENSE file comes with this software, it is provided AS-IS.
   *
-  *
-  *
-  ******************************************************************************
-  * @copyright	BYU-Idaho
-  * @date		2023
-  * @version	F23
-  * @note		For course ECEN-361
-  * @author		Lynn Watson
-  ******************************************************************************
-  *
-  * Student should only modify code between
-  ************** STUDENT EDITABLE HERE STARTS HERE *****
-  ************** STUDENT EDITABLE HERE ENDS HERE *******
-  *
   ******************************************************************************
   */
 /* USER CODE END Header */
@@ -37,7 +23,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "MultiFunctionShield.h"
+#include <stdio.h>
 #include <stdbool.h>
+#include <math.h>
 
 /* USER CODE END Includes */
 
@@ -48,11 +36,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define D1_time 250
-#define D2_time D1_time * 4
-#define D3_time D2_time * 2
-#define D4_time D3_time * 2
-#define count_time 4000
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -61,6 +45,12 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc2;
+
+DAC_HandleTypeDef hdac1;
+
+TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim4;
 TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart2;
@@ -69,10 +59,22 @@ UART_HandleTypeDef huart2;
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 128 * 4,
+  .stack_size = 512 * 4,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* USER CODE BEGIN PV */
+
+const osThreadAttr_t bigStackTask_attributes = {
+  .name = "bigStackTask",
+  .stack_size = 2048 * 4,
+  .priority = (osPriority_t) osPriorityNormal,
+};
+
+/* Here are pointers to the tasks so I can suspend/resume */
+
+osThreadId_t ADC_Task_Handle;
+osThreadId_t DAC_Task_Handle;
+osThreadId_t PWM_Task_Handle;
 
 /* USER CODE END PV */
 
@@ -81,34 +83,35 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_TIM17_Init(void);
+static void MX_TIM1_Init(void);
+static void MX_TIM4_Init(void);
+static void MX_ADC2_Init(void);
+static void MX_DAC1_Init(void);
 void StartDefaultTask(void *argument);
 
 /* USER CODE BEGIN PFP */
-
-/*************  Task-Creation-Part-A ******************/
-/******** put any addtional task declarations in here ***********/
-void D2_Task(void *argument);		// This is the default task working at the beginning of the lab
-
-
-/************** STUDENT EDITABLE HERE STARTS HERE *****/
- //    You'll want to make your own private function prototypes for the other tasks you're adding:
- //    D3 blink task
- //    D4 blink task
- //    7-segment counting task
-void D2_Task2(void *argument);
-void D3_Task(void *argument);
-void D4_Task(void *argument);
-void Sev_Seg_Task(void *argument);
-
-
- /************** STUDENT EDITABLE HERE ENDS HERE *******
- */
-
+/* Private function prototypes -----------------------------------------------*/
+#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+void D2_Task(void *argument);
+void PWM_Brightness_Task(void *argument);
+void Sample_Print_POT_ADC_Task();
+void Do_SevenSeg_Display();
+void DAC_Cycle_Task();
+// void Read_and_Transmit_Task();
+// void Receive_and_Print_Task();
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/*** Globals *********/
+uint8_t RX_Buffer[BUFFER_SIZE] = {0};
+typedef enum {ADC_mode,PWM_mode,DAC_mode} display_modes ;
+display_modes display_mode = ADC_mode;
+double ADC_voltage;
+int  DAC_value = 4095;	// the value written to the DAC  -- set to 12-bit
+bool Tasks_Running = true;
+int duty_cycle_percent = 0;
 
 /* USER CODE END 0 */
 
@@ -119,7 +122,7 @@ void Sev_Seg_Task(void *argument);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  // TaskHandle_t xHandle = NULL;
+
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -128,6 +131,10 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  // HAL_GPIO_WritePin(PWM_LED_GPIO_Port, PWM_LED_Pin, 1);
+  // HAL_GPIO_WritePin(LED_D3_GPIO_Port,LED_D3_Pin,0);
+
+
 
   /* USER CODE END Init */
 
@@ -142,10 +149,26 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_TIM17_Init();
+  MX_TIM1_Init();
+  MX_TIM4_Init();
+  MX_ADC2_Init();
+  MX_DAC1_Init();
   /* USER CODE BEGIN 2 */
-  MultiFunctionShield_Clear();
-  Clear_LEDs();	// Note that D1 is never quite off because the Nucleo Board Built in LED
-  HAL_TIM_Base_Start_IT(&htim17);  // LED SevenSeg cycle thru them
+
+  // Start timer
+  HAL_TIM_Base_Start_IT(&htim17);							// LED SevenSeg cycle thru them
+  MultiFunctionShield_Clear();								// Clear the 7-seg display
+  Clear_LEDs();												// Clear the lights
+  printf("\033\143");
+  printf("Welcome to ECEN-361 Lab-06\n\r\n\r");
+  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_1);		// Start the Timer with the PWM Assigned.
+/**
+ * Note that Timer-1 Channel 1 goes to our MultiBoard D3, and it's Negative True output
+ *
+ */
+
+
+
   /* USER CODE END 2 */
 
   /* Init scheduler */
@@ -172,45 +195,20 @@ int main(void)
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  /*
-   *************  Task-Creation-Part-C *****************
-   *
-   * Here's where the task ("thread")  gets put into the scheduler Queue
-   */
-
-
-	//xTaskCreate(D2_Task,
-				//"D2_Blink",        /* Text name for the task. */
-	            //1000,      /* Stack size in words, not bytes. */
-	            //( void * ) 1,    /* Parameter passed into the task. */
-				//tskIDLE_PRIORITY,/* Priority at which the task is created. */
-	            //&xHandle );
-
-	osThreadNew(D2_Task, "D2 Blink", &defaultTask_attributes);	// This launches the
-	/*
-	 *
-      ************** STUDENT EDITABLE HERE STARTS HERE *****/
-     //  Task-Creation-Part-C *****************
-     //  Here's where the task gets launched into the OS queue of tasks
-     //  See the above one for the D2_Task
-    osThreadNew(D2_Task2, "D2 Blink2", &defaultTask_attributes);
-    osThreadNew(D3_Task, "D3 Blink", &defaultTask_attributes);
-    osThreadNew(D4_Task, "D4 Blink", &defaultTask_attributes);
-    osThreadNew(Sev_Seg_Task, "7Seg Count", &defaultTask_attributes);
-
-
-
-	 ************** STUDENT EDITABLE HERE ENDS HERE *******
-	 */
-
-
   /* add threads, ... */
+  osThreadNew(D2_Task, "D2_Task", &defaultTask_attributes);
+  PWM_Task_Handle = osThreadNew(PWM_Brightness_Task, "PWM_Task", &defaultTask_attributes);
+  ADC_Task_Handle = osThreadNew(Sample_Print_POT_ADC_Task, "ADC_Task", &bigStackTask_attributes);
+  DAC_Task_Handle = osThreadNew(DAC_Cycle_Task, "DAC_Task", &defaultTask_attributes);
+  osThreadNew(Do_SevenSeg_Display, "Display_Task", &defaultTask_attributes);
+
+
+
+
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
-	MultiFunctionShield_Display (4444);  // Lab-04 -- show all 4444's to start
-
   /* USER CODE END RTOS_EVENTS */
 
   /* Start scheduler */
@@ -219,13 +217,29 @@ int main(void)
   /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    // Read_and_Transmit_Task();
 
-  }
+	// osDelay(500);
+	/*
+	HAL_GPIO_WritePin(SPI1_NSS_GPIO_Port, SPI1_NSS_Pin, 0);
+	osDelay(5); // wait a bit before transmitting so the process can start the read
+	HAL_SPI_Transmit(&hspi1, RX_Buffer, BUFFER_SIZE , HAL_MAX_DELAY);
+	osDelay(5); // wait a bit before transmitting so the process can start the read
+	HAL_GPIO_WritePin(SPI1_NSS_GPIO_Port, SPI1_NSS_Pin, 1);
+	*/
+
+	// Sample_Print_POT_ADC_Task();
+
+		}
+
+
   /* USER CODE END 3 */
 }
 
@@ -276,6 +290,236 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC2_Init(void)
+{
+
+  /* USER CODE BEGIN ADC2_Init 0 */
+
+  /* USER CODE END ADC2_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC2_Init 1 */
+
+  /* USER CODE END ADC2_Init 1 */
+
+  /** Common config
+  */
+  hadc2.Instance = ADC2;
+  hadc2.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc2.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc2.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc2.Init.LowPowerAutoWait = DISABLE;
+  hadc2.Init.ContinuousConvMode = DISABLE;
+  hadc2.Init.NbrOfConversion = 1;
+  hadc2.Init.DiscontinuousConvMode = DISABLE;
+  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc2.Init.DMAContinuousRequests = DISABLE;
+  hadc2.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  hadc2.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_5;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC2_Init 2 */
+
+  /* USER CODE END ADC2_Init 2 */
+
+}
+
+/**
+  * @brief DAC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_DAC1_Init(void)
+{
+
+  /* USER CODE BEGIN DAC1_Init 0 */
+
+  /* USER CODE END DAC1_Init 0 */
+
+  DAC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN DAC1_Init 1 */
+
+  /* USER CODE END DAC1_Init 1 */
+
+  /** DAC Initialization
+  */
+  hdac1.Instance = DAC1;
+  if (HAL_DAC_Init(&hdac1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** DAC channel OUT2 config
+  */
+  sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
+  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
+  sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_DISABLE;
+  sConfig.DAC_UserTrimming = DAC_TRIMMING_FACTORY;
+  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DAC1_Init 2 */
+
+  /* USER CODE END DAC1_Init 2 */
+
+}
+
+/**
+  * @brief TIM1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM1_Init(void)
+{
+
+  /* USER CODE BEGIN TIM1_Init 0 */
+
+  /* USER CODE END TIM1_Init 0 */
+
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+  TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+  /* USER CODE BEGIN TIM1_Init 1 */
+
+  /* USER CODE END TIM1_Init 1 */
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 8;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 65535;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_PWM_Init(&htim1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 16000;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+  sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+  sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+  sBreakDeadTimeConfig.DeadTime = 0;
+  sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+  sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+  sBreakDeadTimeConfig.BreakFilter = 0;
+  sBreakDeadTimeConfig.Break2State = TIM_BREAK2_DISABLE;
+  sBreakDeadTimeConfig.Break2Polarity = TIM_BREAK2POLARITY_HIGH;
+  sBreakDeadTimeConfig.Break2Filter = 0;
+  sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+  if (HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM1_Init 2 */
+
+  /* USER CODE END TIM1_Init 2 */
+  HAL_TIM_MspPostInit(&htim1);
+
+}
+
+/**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_OC_InitTypeDef sConfigOC = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 8;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 65535;
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim4, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_Init(&htim4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigOC.OCMode = TIM_OCMODE_PWM1;
+  sConfigOC.Pulse = 16000;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_LOW;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_PWM_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+
+  /* USER CODE END TIM4_Init 2 */
+  HAL_TIM_MspPostInit(&htim4);
+
 }
 
 /**
@@ -363,13 +607,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_D1_GPIO_Port, LED_D1_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOA, LED_D2_Pin|SevenSeg_CLK_Pin|SevenSeg_DATA_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, LED_D2_Pin|LED_D3_Pin|SevenSeg_CLK_Pin|SevenSeg_DATA_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, SevenSeg_LATCH_Pin|LED_D4_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(SevenSeg_LATCH_GPIO_Port, SevenSeg_LATCH_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
@@ -383,35 +624,28 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(LM35_IN_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PA0 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : Button_1_Pin Button_2_Pin */
-  GPIO_InitStruct.Pin = Button_1_Pin|Button_2_Pin;
+  /*Configure GPIO pin : Button_1_Pin */
+  GPIO_InitStruct.Pin = Button_1_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(Button_1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LED_D1_Pin */
-  GPIO_InitStruct.Pin = LED_D1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  HAL_GPIO_Init(LED_D1_GPIO_Port, &GPIO_InitStruct);
+  /*Configure GPIO pin : Button_2_Pin */
+  GPIO_InitStruct.Pin = Button_2_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(Button_2_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : LED_D2_Pin LED_D3_Pin */
-  GPIO_InitStruct.Pin = LED_D2_Pin|LED_D3_Pin;
+  /*Configure GPIO pin : LED_D2_Pin */
+  GPIO_InitStruct.Pin = LED_D2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(LED_D2_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : Button_3_Pin */
   GPIO_InitStruct.Pin = Button_3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(Button_3_GPIO_Port, &GPIO_InitStruct);
 
@@ -429,22 +663,15 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SevenSeg_LATCH_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LED_D4_Pin */
-  GPIO_InitStruct.Pin = LED_D4_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_D4_GPIO_Port, &GPIO_InitStruct);
-
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-
   HAL_NVIC_SetPriority(EXTI1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
   HAL_NVIC_SetPriority(EXTI4_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -452,70 +679,239 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-// Callback: timer has rolled over
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-// Check which version of the timer triggered this callback and toggle the right LED
-/** This timer has to be here to cycle thru the 7-Seg LED displays **/
-  if (htim == &htim17 )
-  {
-	  MultiFunctionShield__ISRFunc();
-  }
-}
 
 
 
 
 
 
+/************  Task-Creation-Part-B *****************/
+void D2_Task(void *argument)
+	{ while(true)
+		{
+		  while(!Tasks_Running)
+			  {
 
+			  HAL_GPIO_TogglePin(LED_D2_GPIO_Port,LED_D2_Pin);
+			  osDelay(500);
+			  }
+			  HAL_GPIO_WritePin(LED_D2_GPIO_Port,LED_D2_Pin,1);
+			  osDelay(5);
+		}
+	}
+
+void DAC_Cycle_Task()
+	{
+	int increment =  100;
+	int  up = increment;
+	int  down = -1 * increment;
+	int  inc = down;  //Start by going down
 
 	/*
-     ************  Task-Creation-Part-B *****************
-    */
-	void D2_Task(void *argument)
-		{ while(true)
-			{ HAL_GPIO_TogglePin(LED_D2_GPIO_Port,LED_D2_Pin);
-			  osDelay(D2_time);
+	 * This task will just change the output voltage on the DAC in a periodic fashion
+	 * Remember the light is negative true output, so a DAC_value of 0: brightest value
+	 * */
+
+	while (true)
+		{
+		while (Tasks_Running)
+			{
+			DAC_value = DAC_value + inc;
+			if (DAC_value <= 0 )
+				{
+				DAC_value = 0;
+				inc = up;
+				}
+			if (DAC_value >= 4096)
+				{
+				DAC_value = 4000;
+				inc = down;
+				}
+			HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_2, DAC_ALIGN_12B_R, (DAC_value & 0xfff));
+			// printf("DAC Value is: %i \n\r",DAC_value);
+			osDelay(300);
 			}
+		}
+	}
+
+void Sample_Print_POT_ADC_Task()
+	{
+	uint16_t current_sample = 1000;
+	float max_reference_voltage = 5.0;
+	// After the .IOC migration, the following didn't work.  It has been replaced
+	// with the switch() statement below to get the bits/sample as configured by the GUI'
+
+	//int bits_per_sample = (((ADC2->CFGR && 0xc)>>2) * 2) + 6;	// ADC config register [3:2] defines 6,8,10, or 12-bit resolution
+
+	int bits_per_sample = 6;
+
+	// Get the resolution from the structure that was built by the .ioc
+
+	switch(hadc2.Init.Resolution)
+		{
+		case ADC_RESOLUTION_12B: {bits_per_sample = 12;} break;
+		case ADC_RESOLUTION_10B: {bits_per_sample = 10;} break;
+		case ADC_RESOLUTION_8B: {bits_per_sample = 8;} break;
+		case ADC_RESOLUTION_6B: {bits_per_sample = 6;} break;
 		}
 
-  /************** STUDENT EDITABLE HERE STARTS HERE *****/
+	int samples = 1 << bits_per_sample;		//power of 2
 
-  //Here's where the definition of the task (the 'callback') gets made
-  //See the above one for the D2_Task
-  //Put definition of other tasks here
+	while(true)
+		{
+		current_sample = Poll_POT_ADC_Value();
+		ADC_voltage = ((double)current_sample/(double)samples * max_reference_voltage);
+		osDelay(1000);
+		}
+	}
 
-	void D2_Task2(void *argument)//second D2 blink task
-		{ while(true)
-			{ HAL_GPIO_TogglePin(LED_D2_GPIO_Port,LED_D2_Pin);
-				 osDelay(500);
-			}
-		}
-	void D3_Task(void *argument)  //D3 blink task
-		{ while(true)
-			{ HAL_GPIO_TogglePin(LED_D3_GPIO_Port,LED_D3_Pin);
-				osDelay(250);
-			}
-		}
-	void D4_Task(void *argument)  //D4 blink task
-		{ while(true)
-			{ HAL_GPIO_TogglePin(LED_D4_GPIO_Port,LED_D4_Pin);
-			    osDelay(125);
-			}
-		}
-	void Sev_Seg_Task(void *argument)
-		{int seg_count = 0;
+void PWM_Brightness_Task(void *arguments)
+	{
+		int percent_per_step = 5;
+		// int full_count =  TIM15->ARR;		//Get the top range from what's set in the init.
+		int full_count =  TIM4->ARR;		//Get the top range from what's set in the init.
+		bool count_up = true;
+		uint16_t ccr1 = 0;
 		while(true)
-
-			{ MultiFunctionShield_Display(seg_count);
-				osDelay(1500);
-				seg_count = seg_count + 1;
-			}
-
+		{
+			while (Tasks_Running)
+				{
+				ccr1 = (uint16_t) duty_cycle_percent * full_count / 100;
+				//TIM15->CCR1 = ccr1;		// This is the limit that turns on the PWM
+				TIM4->CCR1 = ccr1;		// This is the limit that turns on the PWM
+				if (count_up)
+					{
+					duty_cycle_percent += percent_per_step;
+					if (duty_cycle_percent >=100) count_up = false;
+					} else
+					{
+					duty_cycle_percent -= percent_per_step;
+					if (duty_cycle_percent <=0) count_up = true;
+					}
+				osDelay(100);
+				}
 		}
-     /************** STUDENT EDITABLE HERE ENDS HERE *******
-     */
+	}
+
+
+
+void Read_and_Transmit_Task()
+	{
+	uint8_t receive_byte;
+	// uint8_t receive_buffer[BUFFER_SIZE] = {0};
+	// uint8_t *receive_buffer_ptr = receive_buffer;
+	uint8_t bytes_in =0;
+	uint8_t xmitmsg[] = "\n\rInput Line to Send ->";
+	uint8_t sndmsg[] = "\n\rSending -> ";
+	uint8_t *xmitmsg_ptr = xmitmsg;
+	uint8_t *sndmsg_ptr = sndmsg;
+
+		bytes_in = 0;
+		receive_byte = 0;
+		HAL_UART_Transmit(&huart2, xmitmsg_ptr, 23, HAL_MAX_DELAY);
+
+		/* This task reads a line from the Serial/USB port and
+		 * transmits out thru SPI
+		 * Note that this is polling!  One byte at a time.  Very inefficient
+		 */
+		while (receive_byte != '\r')
+		{
+			while (HAL_UART_Receive(&huart2, &receive_byte, 1,10) != HAL_OK) osDelay(1);
+			/* Now we have a byte, if it's a carriage return, send the string
+			 * If not, put it on the buffer
+			 */
+			RX_Buffer[bytes_in] = receive_byte;
+			HAL_UART_Transmit(&huart2, &RX_Buffer[bytes_in++] , 1, HAL_MAX_DELAY);  //echo each one as it's typed
+		}
+
+		RX_Buffer[bytes_in++] = '\n'; // Add a line_feed
+		// Tell the User what we got and what we're sending
+		HAL_UART_Transmit(&huart2, sndmsg_ptr, 13, HAL_MAX_DELAY);
+		//HAL_UART_Transmit(&huart2, receive_buffer_ptr, bytes_in, HAL_MAX_DELAY);
+		HAL_UART_Transmit(&huart2, RX_Buffer, bytes_in, HAL_MAX_DELAY);
+		// Now send it from the SPI Master (SPI_1) -> SPI Slave (SPI_2)
+		// Turn on the ChipEnable (SPI1_NSS -- active low)
+		}
+
+
+
+
+/**
+  * @brief  Retargets the C library printf function to the USART.
+  * @param  None
+  * @retval None
+  */
+PUTCHAR_PROTOTYPE
+{
+  /* Place your implementation of fputc here */
+  /* e.g. write a character to the USART1 and Loop until the end of transmission */
+  HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, 0xFFFF);
+
+  return ch;
+}
+
+void Do_SevenSeg_Display()
+	{ /* Just cycle thru the modes when there's a button push */
+	while (true)
+		{
+		switch (display_mode)
+			{
+			case ADC_mode:
+				disp_adc_on_7seg(ADC_voltage);
+				break;
+			case PWM_mode:
+				// Show the duty cycle percentage
+			    MultiFunctionShield_Display_PWM(duty_cycle_percent);
+				break;
+			case DAC_mode:
+			    MultiFunctionShield_Display(DAC_value);
+				break;
+			}
+		osDelay(20);
+		}
+	}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+	{
+	// All three buttons generate GPIO  interrupts
+	switch(GPIO_Pin)
+	{
+	case Button_1_Pin:
+		/* Button_1 is the Display Mode switcher.  See the lab description */
+		switch (display_mode)
+		{
+		case ADC_mode:
+			display_mode = PWM_mode;
+			break;
+		case PWM_mode:
+			display_mode = DAC_mode;
+			break;
+		case DAC_mode:
+			display_mode = ADC_mode;
+			break;
+		default: __NOP();
+		}
+		break;
+	case Button_2_Pin:
+		/* Button_2 is the Start/Stop Button. */
+			Tasks_Running = !Tasks_Running;
+		/* If we just went into stop mode, then display some info */
+		if (!Tasks_Running)
+			{
+			printf("STOPPED  D2 Blinking\n\r   PWM  Value: %%%d\n\r   CCRL Value: %d\n\r",
+				duty_cycle_percent,
+				((uint16_t) TIM4->ARR / 100 * duty_cycle_percent ));
+				// ccr1 = (uint16_t) duty_cycle_percent * full_count / 100;
+			printf("   DAC 12-bit :0x%x\n\r",DAC_value);
+			} else
+			printf("RE-STARTING\n\r\r");
+		break;
+	case Button_3_Pin:
+		break;
+	default: __NOP();
+	HAL_Delay(70);  //* Time to make sure the switch is debounced
+	}
+}
 
 
 /* USER CODE END 4 */
@@ -530,17 +926,52 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN 5 */
-/* This task is created automatically and can't be deleted
-*/
-/* Infinite loop */
+  /* Infinite loop */
   for(;;)
   {
-  HAL_GPIO_WritePin(LED_D1_GPIO_Port,LED_D1_Pin,1); //Active low on the multiboard
-  osDelay(D1_time);
+    osDelay(1);
   }
-  // If we goof, exit gracefully
-  osThreadTerminate(NULL);
   /* USER CODE END 5 */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM2 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+	  if (htim == &htim17 ) { MultiFunctionShield__ISRFunc(); }
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM2) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+}
+
+uint16_t Poll_POT_ADC_Value(void)
+	{
+	uint16_t  ADC_Result;
+	// Start ADC Conversion of the 10K potentiometer
+	MX_ADC2_Init();
+	HAL_ADC_Start(&hadc2);
+	HAL_DAC_Start(&hdac1, DAC_CHANNEL_2);
+
+	// The conversion should be less than a millisec
+	// so it'll be done while we're waiting for the next number to show
+	osDelay(10);
+
+   // Poll ADC2 Perihperal & TimeOut = 1mSec
+	HAL_ADC_PollForConversion(&hadc2, HAL_MAX_DELAY);
+   // Read The ADC Conversion Result & Map It To PWM DutyCycle
+	ADC_Result = HAL_ADC_GetValue(&hadc2);
+	return ADC_Result;
+
+  /* USER CODE END Callback 1 */
 }
 
 /**
