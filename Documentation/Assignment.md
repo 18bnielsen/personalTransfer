@@ -1,6 +1,6 @@
 # ECEN-361 Lab-06:ADC, PWM, and DAC
 
-     Student Name:  Fill-in HERE
+     Student Name:  Brandon Rico
 
 ## Introduction and Objectives of the Lab
 
@@ -59,9 +59,9 @@ As seen in the schematic, the Multifunction board has a potentiometer on it that
 
 ## Part 1: Questions (4 pts)
 
-* What is the minimum sample resolution (change) you can see by adjusting the potentiometer? <mark>[*answer here*]</mark>
+* What is the minimum sample resolution (change) you can see by adjusting the potentiometer? <mark>[0.078]</mark>
 
-* Can you predict this change, given the current settings of the ADC? <mark>[*answer here*]</mark>
+* Can you predict this change, given the current settings of the ADC? <mark>[Yes, you can calculate it using the following equation: Resolution = Vref/2^(number of bits), based on the math it the resolution would be 0.078125]</mark>
 
 Change the sampling accuracy of the ADC (Use the **.ioc** file & STM32 GUI), to be the maximum of 12-bit: Re-generate, build, and compile.
 
@@ -71,7 +71,7 @@ Now predict and verify the smallest sample resolution being detected.
 
 * Can you predict this change (from the math), given the current settings of the ADC?  
   
-   Predicted: <mark>[*answer here*]</mark>    Actual Seen: <mark>[*answer here*]</mark>
+   Predicted: <mark>[0.0012207]</mark>    Actual Seen: <mark>[0.001]</mark>
 
 ### PWM (2 pts)
 
@@ -81,7 +81,7 @@ Measure the D4_LED output at a different duty-cycle points. The duty cycle is sh
 
 * Does the duty cycle shown match the waveform?  List the measured times  (high vs low)
   
-   High Time: <mark>[*answer here*]</mark>    Low Time: <mark>[*answer here*]</mark>
+   High Time: <mark>[1.835ms]</mark>    Low Time: <mark>[5.519]</mark>
 
 ### DAC (4 pts)
 
@@ -91,19 +91,20 @@ Measure a few points on the D1_LED output. Do they match with estimation shown o
 
 List a couple of the measurements (12-bit DAC, 5V range).
 
-* Reported Voltage: <mark>[*answer here*]</mark>  Measured Voltage: <mark>[*answer here*]</mark> 
-* Reported Voltage: <mark>[*answer here*]</mark>  Measured Voltage: <mark>[*answer here*]</mark> 
-* Reported Voltage: <mark>[*answer here*]</mark>  Measured Voltage: <mark>[*answer here*]</mark> 
+* Reported Voltage: <mark>[3.245]</mark>  Measured Voltage: <mark>[3.252]</mark> 
+* Reported Voltage: <mark>[4.257]</mark>  Measured Voltage: <mark>[3.252]</mark> 
+* Reported Voltage: <mark>[1.934]</mark>  Measured Voltage: <mark>[1.78]</mark> 
 
 In a DAC controlled LED, the LED can’t truly be dimmed to zero because the Vforward of the diode isn’t high enough to turn on the diode and use the current to generate photons.
 
 Using the DisplayMode button and the StartStop button, empirically determine the voltage at which the D1_LED appears to go (almost) out?   (Remember this is negative true logic).
 
-* For an LED like this, which approach to ‘dimming’ makes more sense?  PWM or DAC? <mark>[*answer here*]</mark>
+* For an LED like this, which approach to ‘dimming’ makes more sense?  PWM or DAC? <mark>[PWM, makes more sense ]</mark>
 
-* Would this apply to a motor?  (Think about this …) <mark>[*answer here*]</mark>
+* Would this apply to a motor?  (Think about this …) <mark>[I think a PWM would still be best for a motor, It allows for efficient control of the motors speed and it is also energy efficient.
+]</mark>
 
-Which approach would work for approximating a sine-wave output? PWM or DAC? Why?  <mark>[*answer here*]</mark>
+Which approach would work for approximating a sine-wave output? PWM or DAC? Why?  <mark>[A DAC is better suited for generating sine wave outputs. It can produce a continuous range of voltage levels, this would let us get a more accurate representation of a sine wave.]</mark>
 
 ### Extra Credit (5 pts maximum)
 
