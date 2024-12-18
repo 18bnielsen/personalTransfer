@@ -1,5 +1,3 @@
-*.o
-*.list
 # Prerequisites
 *.d
 
@@ -8,8 +6,6 @@
 *.ko
 *.obj
 *.cyclo
-.idea*
-.idea/*
 
 # Linker output
 *.ilk
@@ -69,16 +65,3 @@ Debug/Core/Src/main.cyclo
 
 .settings/**
 Debug/**
-Documentation/~$EN-361-Lab-02--STM32 Clocks, Timers, and Interrupts.docx
-/Debug/
-Documentation/ECEN-361-Lab-10-Interprocess-Communication.docx
-*.o
-*.cyclo
-*.xml
-*.o
-*.xml
-.DS_Store
-Debug/Core/Src/main.cyclo
-Debug/Core/Src/main.o
-Debug/Core/Src/main.su
-.DS_Store

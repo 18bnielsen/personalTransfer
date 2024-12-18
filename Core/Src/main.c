@@ -2,177 +2,146 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : ECEN-361-Lab-09
-  * IPC examples
+  * @brief          : ECEN-361-Lab-08-Part-2-DAC-ADC-Sampling
   *
   * BYU-Idaho
   * Fall-2023 :   Lynn Watson
   *
   * See the  STUDENTS EDITABLE places below to modify for submission
-  *
   ******************************************************************************
   */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "sinewavetable.h"
 #include "MultiFunctionShield.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <strings.h>
-
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
+void Start_the_DAC_DMA(void);
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define B1  1
-#define B2  2
-#define B3  4
+int sindex = 0;
+int hit_low = true;
+int last_tick = 0;
+int this_tick = 0;
 
+enum ADC_Samples_Per_Cycle {
+	one_sample_per,
+	two_samples_per,
+	four_samples_per,
+	eight_samples_per,
+	fifty_samples_per,
+	NUM_CASES
+} cases;
+
+struct adc_sample_config {
+	int samples_per;
+	int Prescaler;
+	int Period;
+	} ;
+
+
+/************** STUDENT EDIT START ******************/
+/* Fill in the values that effect the sample rate, (timer3)
+ * The expected waveform is the "1000" point one == 1 Hz
+ *
+ * NOTE that the values are only valid for 50 and 8.  1,2,4 are all TBD
+ * Also note that to get really 'exact' fine-tuning, it's necessary
+ * to do some measurement.  The 'why' is a question in the assignment.
+ */
+
+const struct adc_sample_config sample_case[] = {
+		{1,		7999,	10000},	//First #  in each line is the samples_per
+		{2,		799,	50000},	//Second # in each line is the prescaler
+		{4,		799,	25000},	//Third # in each line is the period
+		{8,		799,	12510}, // This line is valid,
+		{50,	79,		20018}
+		};
+/************** STUDENT EDIT END ******************/
+
+
+enum ADC_Samples_Per_Cycle current_sample_case = fifty_samples_per ;
+
+
+
+int adc_value;
+int the_period = 0;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
-#
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc3;
+
+DAC_HandleTypeDef hdac1;
+DMA_HandleTypeDef hdma_dac_ch1;
+
+TIM_HandleTypeDef htim2;
+TIM_HandleTypeDef htim3;
+TIM_HandleTypeDef htim15;
 TIM_HandleTypeDef htim17;
 
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_tx;
 
-/* Definitions for defaultTask */
-osThreadId_t defaultTaskHandle;
-const osThreadAttr_t defaultTask_attributes = {
-  .name = "defaultTask",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityNormal,
-};
-/* Definitions for NotifyToggle */
-osThreadId_t NotifyToggleHandle;
-const osThreadAttr_t NotifyToggle_attributes = {
-  .name = "NotifyToggle",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for SW_Timer_Toggle */
-osThreadId_t SW_Timer_ToggleHandle;
-const osThreadAttr_t SW_Timer_Toggle_attributes = {
-  .name = "SW_Timer_Toggle",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for Mutex_CountUp */
-osThreadId_t Mutex_CountUpHandle;
-const osThreadAttr_t Mutex_CountUp_attributes = {
-  .name = "Mutex_CountUp",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for Mutex_CountDown */
-osThreadId_t Mutex_CountDownHandle;
-const osThreadAttr_t Mutex_CountDown_attributes = {
-  .name = "Mutex_CountDown",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for UpdateGlobDisp */
-osThreadId_t UpdateGlobDispHandle;
-const osThreadAttr_t UpdateGlobDisp_attributes = {
-  .name = "UpdateGlobDisp",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for ResetGlobal */
-osThreadId_t ResetGlobalHandle;
-const osThreadAttr_t ResetGlobal_attributes = {
-  .name = "ResetGlobal",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for DebounceTask */
-osThreadId_t DebounceTaskHandle;
-const osThreadAttr_t DebounceTask_attributes = {
-  .name = "DebounceTask",
-  .stack_size = 128 * 4,
-  .priority = (osPriority_t) osPriorityLow,
-};
-/* Definitions for SW_Timer_7Seg */
-osTimerId_t SW_Timer_7SegHandle;
-const osTimerAttr_t SW_Timer_7Seg_attributes = {
-  .name = "SW_Timer_7Seg"
-};
-/* Definitions for UpDownMutex */
-osMutexId_t UpDownMutexHandle;
-const osMutexAttr_t UpDownMutex_attributes = {
-  .name = "UpDownMutex"
-};
-/* Definitions for Button_1_Semaphore */
-osSemaphoreId_t Button_1_SemaphoreHandle;
-const osSemaphoreAttr_t Button_1_Semaphore_attributes = {
-  .name = "Button_1_Semaphore"
-};
-/* Definitions for Button_2_Semaphore */
-osSemaphoreId_t Button_2_SemaphoreHandle;
-const osSemaphoreAttr_t Button_2_Semaphore_attributes = {
-  .name = "Button_2_Semaphore"
-};
-/* Definitions for Button_3_Semaphore */
-osSemaphoreId_t Button_3_SemaphoreHandle;
-const osSemaphoreAttr_t Button_3_Semaphore_attributes = {
-  .name = "Button_3_Semaphore"
-};
-/* Definitions for Semaphore_Counting */
-osSemaphoreId_t Semaphore_CountingHandle;
-const osSemaphoreAttr_t Semaphore_Counting_attributes = {
-  .name = "Semaphore_Counting"
-};
 /* USER CODE BEGIN PV */
-osSemaphoreId_t SwitchToDebounce;  // Type has to be in here because the GUI auto
+#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+/* Going to use the buffer to look for level-crossing detector
+ * so we can use the ADC as a frequency counter.
+ *
+ * May also want to send the value out with another DMA that
+ * reads from this buffer and sends it out via USART2
+ */
+#define ADC_BUFFER_LENGTH 1
+uint16_t adc_buffer[ADC_BUFFER_LENGTH];
 
-uint8_t countdown_display = 9;
-
-/*
- * This is a global variable with multiple writers
- * But should not change, because all writers must have the mutex
+/* This is the formatted string buffer for the converted ADC results
+ * After the buffer full of ADC samples is full, they have to be converted
+ * to ASCII, a string per number that represents the 12-bits per sample
  *
  */
-#define Protected_Count_Initial_Value 50
-uint8_t mutex_protected_count = Protected_Count_Initial_Value ;
-
+uint8_t adc_results_strings_buffer[ADC_BUFFER_LENGTH];
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_DAC1_Init(void);
+static void MX_TIM2_Init(void);
 static void MX_TIM17_Init(void);
-void Default_Task(void *argument);
-void NotifyToggleTask(void *argument);
-void SW_Timer_Task(void *argument);
-void Mutex_CountUpTask(void *argument);
-void Mutex_CountDownTask(void *argument);
-void UpdateGlobDisplayProcess(void *argument);
-void ResetGlobalTask(void *argument);
-void StartDebounce(void *argument);
-void SW_Timer_Countdown(void *argument);
-
+static void MX_ADC3_Init(void);
+static void MX_TIM3_Init(void);
+static void MX_TIM15_Init(void);
 /* USER CODE BEGIN PFP */
+void SW_SineWave(void * argument);
+typedef void (*HAL_DMA_CallbackID)(DMA_HandleTypeDef *_hdma); //Pointer to the callback
+void User_DMACompleteCallback(DMA_HandleTypeDef *hdac);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/************* GLOBALS **************/
+int sinewave_table_index = 0;
+
+enum points_per_cycle {ten=10,hundred=100,thousand=1000};
+enum points_per_cycle points_to_use_in_a_cycle  = thousand;
 
 /* USER CODE END 0 */
 
@@ -183,7 +152,6 @@ void SW_Timer_Countdown(void *argument);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -192,6 +160,7 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+#define USE_HAL_DAC_REGISTER_CALLBACKS        1U
 
   /* USER CODE END Init */
 
@@ -204,96 +173,50 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
+  MX_DAC1_Init();
+  MX_TIM2_Init();
   MX_TIM17_Init();
+  MX_ADC3_Init();
+  MX_TIM3_Init();
+  MX_TIM15_Init();
   /* USER CODE BEGIN 2 */
-  printf("\033\143"); printf("Welcome to ECEN-361 Lab-09\n\r");
-	// Start timer
-	MultiFunctionShield_Clear();							// Clear the 7-seg display
-	HAL_TIM_Base_Start_IT(&htim17);							// LED SevenSeg cycle thru them
-	Clear_LEDs();
 
+
+  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_TIM_Base_Start_IT(&htim3); //Timer3 is the ADC Sample trigger
+  HAL_TIM_Base_Start_IT(&htim15); //Timer6 is an absolute Tick
 
   /* USER CODE END 2 */
 
-  /* Init scheduler */
-  osKernelInitialize();
-  /* Create the mutex(es) */
-  /* creation of UpDownMutex */
-  UpDownMutexHandle = osMutexNew(&UpDownMutex_attributes);
-
-  /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
-  /* USER CODE END RTOS_MUTEX */
-
-  /* Create the semaphores(s) */
-  /* creation of Button_1_Semaphore */
-  Button_1_SemaphoreHandle = osSemaphoreNew(1, 0, &Button_1_Semaphore_attributes);
-
-  /* creation of Button_2_Semaphore */
-  Button_2_SemaphoreHandle = osSemaphoreNew(1, 0, &Button_2_Semaphore_attributes);
-
-  /* creation of Button_3_Semaphore */
-  Button_3_SemaphoreHandle = osSemaphoreNew(1, 0, &Button_3_Semaphore_attributes);
-
-  /* creation of Semaphore_Counting */
-  Semaphore_CountingHandle = osSemaphoreNew(31, 31, &Semaphore_Counting_attributes);
-
-  /* USER CODE BEGIN RTOS_SEMAPHORES */
-  /* add semaphores, ... */
-  /* USER CODE END RTOS_SEMAPHORES */
-
-  /* Create the timer(s) */
-  /* creation of SW_Timer_7Seg */
-  SW_Timer_7SegHandle = osTimerNew(SW_Timer_Countdown, osTimerPeriodic, NULL, &SW_Timer_7Seg_attributes);
-
-  /* USER CODE BEGIN RTOS_TIMERS */
-  /* start timers, add new ones, ... */
-  /* USER CODE END RTOS_TIMERS */
-
-  /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
-  /* USER CODE END RTOS_QUEUES */
-
-  /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(Default_Task, NULL, &defaultTask_attributes);
-
-  /* creation of NotifyToggle */
-  NotifyToggleHandle = osThreadNew(NotifyToggleTask, NULL, &NotifyToggle_attributes);
-
-  /* creation of SW_Timer_Toggle */
-  SW_Timer_ToggleHandle = osThreadNew(SW_Timer_Task, NULL, &SW_Timer_Toggle_attributes);
-
-  /* creation of Mutex_CountUp */
-  Mutex_CountUpHandle = osThreadNew(Mutex_CountUpTask, NULL, &Mutex_CountUp_attributes);
-
-  /* creation of Mutex_CountDown */
-  Mutex_CountDownHandle = osThreadNew(Mutex_CountDownTask, NULL, &Mutex_CountDown_attributes);
-
-  /* creation of UpdateGlobDisp */
-  UpdateGlobDispHandle = osThreadNew(UpdateGlobDisplayProcess, NULL, &UpdateGlobDisp_attributes);
-
-  /* creation of ResetGlobal */
-  ResetGlobalHandle = osThreadNew(ResetGlobalTask, NULL, &ResetGlobal_attributes);
-
-  /* creation of DebounceTask */
-  DebounceTaskHandle = osThreadNew(StartDebounce, NULL, &DebounceTask_attributes);
-
-  /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
-  /* USER CODE END RTOS_THREADS */
-
-  /* USER CODE BEGIN RTOS_EVENTS */
-  /* add events, ... */
-  /* USER CODE END RTOS_EVENTS */
-
-  /* Start scheduler */
-  osKernelStart();
-
-  /* We should never get here as control is now taken by the scheduler */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+  // HAL_GPIO_WritePin(LD2_GPIO_Port,LD2_Pin,1);
+
+  printf("\033\143"); printf("Welcome to ECEN-361 Lab-8 Part2 SineWave Sampling\n\r\r");
+
+
+  // Start timer
+  MultiFunctionShield_Clear();								// Clear the 7-seg display
+  HAL_TIM_Base_Start_IT(&htim17);							// LED SevenSeg cycle thru them
+  Clear_LEDs();
+  MultiFunctionShield_Display(points_to_use_in_a_cycle);
+
+  /* Setup the DMA */
+
+  if (HAL_DMA_Init(&hdma_dac_ch1) != HAL_OK)	{while(1);}
+  // if (HAL_DMA_Init(&hdma_adc3) != HAL_OK)		{while(1);}
+  if (HAL_DMA_Init(&hdma_usart2_tx) != HAL_OK)		{while(1);}
+
+
+
+// HAL_StatusTypeDef HAL_DMA_RegisterCallback(DMA_HandleTypeDef *hdma, HAL_DMA_CallbackIDTypeDef CallbackID, void (* pCallback)(DMA_HandleTypeDef *_hdma));
+//*Tell the DMA interrupt where to go*/
+  HAL_DMA_RegisterCallback(&hdma_dac_ch1, HAL_DAC_CH1_COMPLETE_CB_ID, User_DMACompleteCallback);
+  Start_the_DAC_DMA();
+
   while (1)
   {
     /* USER CODE END WHILE */
@@ -350,6 +273,246 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC3_Init(void)
+{
+
+  /* USER CODE BEGIN ADC3_Init 0 */
+
+  /* USER CODE END ADC3_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC3_Init 1 */
+
+  /* USER CODE END ADC3_Init 1 */
+
+  /** Common config
+  */
+  hadc3.Instance = ADC3;
+  hadc3.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc3.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc3.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc3.Init.ScanConvMode = ADC_SCAN_DISABLE;
+  hadc3.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc3.Init.LowPowerAutoWait = DISABLE;
+  hadc3.Init.ContinuousConvMode = DISABLE;
+  hadc3.Init.NbrOfConversion = 1;
+  hadc3.Init.DiscontinuousConvMode = DISABLE;
+  hadc3.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc3.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc3.Init.DMAContinuousRequests = DISABLE;
+  hadc3.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
+  hadc3.Init.OversamplingMode = DISABLE;
+  if (HAL_ADC_Init(&hadc3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_4;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SingleDiff = ADC_SINGLE_ENDED;
+  sConfig.OffsetNumber = ADC_OFFSET_NONE;
+  sConfig.Offset = 0;
+  if (HAL_ADC_ConfigChannel(&hadc3, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC3_Init 2 */
+
+  /* USER CODE END ADC3_Init 2 */
+
+}
+
+/**
+  * @brief DAC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_DAC1_Init(void)
+{
+
+  /* USER CODE BEGIN DAC1_Init 0 */
+
+  /* USER CODE END DAC1_Init 0 */
+
+  DAC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN DAC1_Init 1 */
+
+  /* USER CODE END DAC1_Init 1 */
+
+  /** DAC Initialization
+  */
+  hdac1.Instance = DAC1;
+  if (HAL_DAC_Init(&hdac1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** DAC channel OUT1 config
+  */
+  sConfig.DAC_SampleAndHold = DAC_SAMPLEANDHOLD_DISABLE;
+  sConfig.DAC_Trigger = DAC_TRIGGER_T2_TRGO;
+  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
+  sConfig.DAC_ConnectOnChipPeripheral = DAC_CHIPCONNECT_DISABLE;
+  sConfig.DAC_UserTrimming = DAC_TRIMMING_USER;
+  sConfig.DAC_TrimmingValue = 1;
+  if (HAL_DAC_ConfigChannel(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DAC1_Init 2 */
+  // HAL_StatusTypeDef HAL_DACEx_SelfCalibrate(DAC_HandleTypeDef *hdac, *sConfig, uint32_t Channel)
+  if (HAL_DACEx_SelfCalibrate(&hdac1, &sConfig, DAC_CHANNEL_1) != HAL_OK) {Error_Handler();}
+
+  /* USER CODE END DAC1_Init 2 */
+
+}
+
+/**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 79;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 1000;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
+  * @brief TIM3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM3_Init(void)
+{
+
+  /* USER CODE BEGIN TIM3_Init 0 */
+
+  /* USER CODE END TIM3_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM3_Init 1 */
+
+  /* USER CODE END TIM3_Init 1 */
+  htim3.Instance = TIM3;
+  htim3.Init.Prescaler = 79;
+  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim3.Init.Period = 20018;
+  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim3, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM3_Init 2 */
+
+  /* USER CODE END TIM3_Init 2 */
+
+}
+
+/**
+  * @brief TIM15 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM15_Init(void)
+{
+
+  /* USER CODE BEGIN TIM15_Init 0 */
+
+  /* USER CODE END TIM15_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM15_Init 1 */
+
+  /* USER CODE END TIM15_Init 1 */
+  htim15.Instance = TIM15;
+  htim15.Init.Prescaler = 79;
+  htim15.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim15.Init.Period = 1000;
+  htim15.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim15.Init.RepetitionCounter = 0;
+  htim15.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim15) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim15, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim15, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM15_Init 2 */
+
+  /* USER CODE END TIM15_Init 2 */
+
 }
 
 /**
@@ -420,6 +583,22 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -437,6 +616,9 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, ADC_Sample_Pin|Period_Start_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, LED_D1_Pin|LED_D2_Pin|LED_D3_Pin|SevenSeg_CLK_Pin
                           |SevenSeg_DATA_Pin, GPIO_PIN_RESET);
 
@@ -449,103 +631,64 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : LM35_IN_Pin */
-  GPIO_InitStruct.Pin = LM35_IN_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
+  /*Configure GPIO pins : ADC_Sample_Pin Period_Start_Pin */
+  GPIO_InitStruct.Pin = ADC_Sample_Pin|Period_Start_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(LM35_IN_GPIO_Port, &GPIO_InitStruct);
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PA0 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0;
-  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
+  /*Configure GPIO pin : Button_1_Pin */
+  GPIO_InitStruct.Pin = Button_1_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(Button_1_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : Button_1_Pin Button_2_Pin */
-  GPIO_InitStruct.Pin = Button_1_Pin|Button_2_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  /*Configure GPIO pins : LED_D1_Pin LED_D2_Pin LED_D3_Pin SevenSeg_CLK_Pin
+                           SevenSeg_DATA_Pin */
+  GPIO_InitStruct.Pin = LED_D1_Pin|LED_D2_Pin|LED_D3_Pin|SevenSeg_CLK_Pin
+                          |SevenSeg_DATA_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : LED_D1_Pin LED_D2_Pin LED_D3_Pin */
-  GPIO_InitStruct.Pin = LED_D1_Pin|LED_D2_Pin|LED_D3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : Button_3_Pin */
   GPIO_InitStruct.Pin = Button_3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(Button_3_GPIO_Port, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : SevenSeg_CLK_Pin SevenSeg_DATA_Pin */
-  GPIO_InitStruct.Pin = SevenSeg_CLK_Pin|SevenSeg_DATA_Pin;
+  /*Configure GPIO pin : PC9 */
+  GPIO_InitStruct.Pin = GPIO_PIN_9;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF3_TIM8;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : SevenSeg_LATCH_Pin LED_D4_Pin */
+  GPIO_InitStruct.Pin = SevenSeg_LATCH_Pin|LED_D4_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : SevenSeg_LATCH_Pin */
-  GPIO_InitStruct.Pin = SevenSeg_LATCH_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SevenSeg_LATCH_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : LED_D4_Pin */
-  GPIO_InitStruct.Pin = LED_D4_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_D4_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI0_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI1_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
-  HAL_NVIC_SetPriority(EXTI4_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-	{
-	//BaseType_t pxH ;
-	uint32_t pxH = 0 ;
-	// All three buttons generate GPIO  interrupts
-	switch(GPIO_Pin)
-		{
-		case Button_1_Pin:
-			pxH = 1;
-			xTaskNotifyFromISR(DebounceTaskHandle, B1, eSetBits, (BaseType_t*) pxH );
-			break  ;
-
-		case Button_2_Pin:
-			pxH = 2;
-			xTaskNotifyFromISR(DebounceTaskHandle, B2, eSetBits, (BaseType_t*) pxH );
-			break;
-
-		case Button_3_Pin:
-			pxH = 3;
-			xTaskNotifyFromISR(DebounceTaskHandle, B3, eSetBits, (BaseType_t*) pxH );
-			// srand((unsigned) uwTick );
-			// osSemaphoreRelease(Button_3_SemaphoreHandle);
-			break;
-		}
-
-	}
-
-
-
 
 /**
   * @brief  Retargets the C library printf function to the USART.
@@ -562,264 +705,180 @@ PUTCHAR_PROTOTYPE
 }
 
 
-int random_wait(int min)
-	{
-	/* Return a random number between 200 - 300
-	 * Meant to be mS for the count up or count down in the protected
-	 * mutex demonstration routines
-	 */
-	int rand_millisec = min + (rand() % 99);
-	return rand_millisec;
 
+
+
+
+void HAL_DAC_ConvCpltCallbackCh1(DAC_HandleTypeDef *hdac)
+	{
+	/* Fill this in when I know what to do if I get here */
+	/* We get here when we are starting a new cycle of the analog out
+	 *
+	 */
+	// Toggle a GPIO so I can measure it with a scope
+	HAL_GPIO_WritePin(Period_Start_GPIO_Port, Period_Start_Pin, GPIO_PIN_SET);
+	for(int i=0;i<10;i++);
+	HAL_GPIO_WritePin(Period_Start_GPIO_Port, Period_Start_Pin, GPIO_PIN_RESET);
+	// And set the period in ms  (global)
+	the_period = uwTick - last_tick;
+	last_tick = uwTick;
+	HAL_DMA_RegisterCallback(&hdma_dac_ch1, HAL_DAC_CH1_COMPLETE_CB_ID, User_DMACompleteCallback);
 	}
 
 
-/* USER CODE END 4 */
-
-/* USER CODE BEGIN Header_Default_Task */
-/**
-  * @brief  Function implementing the defaultTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_Default_Task */
-void Default_Task(void *argument)
-{
-  /* USER CODE BEGIN 5 */
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END 5 */
-}
-
-/* USER CODE BEGIN Header_NotifyToggleTask */
-/**
-* @brief Function implementing the NotifToggle thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_NotifyToggleTask */
-void NotifyToggleTask(void *argument)
-{
-  /* USER CODE BEGIN NotifyToggleTask */
-  /* Infinite loop */
- // unsigned int *p = 0;
- uint32_t *p = 0 ;
-  for(;;)
-  {
-	xTaskNotifyWait( 0,  0, p, osWaitForever);
-	HAL_GPIO_TogglePin(LED_D2_GPIO_Port , LED_D2_Pin);
-    osDelay(20);
-  }
-  /* USER CODE END NotifyToggleTask */
-}
-
-/* USER CODE BEGIN Header_SW_Timer_Task */
-/**
-* @brief Function implementing the SW_Timer_Toggle thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_SW_Timer_Task */
-void SW_Timer_Task(void *argument)
-{
-  /* USER CODE BEGIN SW_Timer_Task */
-  /* Infinite loop */
-  for(;;)
-  {
-	osSemaphoreAcquire(Button_2_SemaphoreHandle,osWaitForever);
-	  // A button push starts or stops the SW Timer
-	  // Button push is indicated by the semaphore
-	if (osTimerIsRunning(SW_Timer_7SegHandle))
-		osTimerStop(SW_Timer_7SegHandle );
-	else
-		osTimerStart(SW_Timer_7SegHandle , 200);
-    osDelay(1);
-  }
-  /* USER CODE END SW_Timer_Task */
-}
-
-/* USER CODE BEGIN Header_Mutex_CountUpTask */
-/**
-* @brief Function implementing the Mutex_CountUp thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_Mutex_CountUpTask */
-void Mutex_CountUpTask(void *argument)
-{
-  /* USER CODE BEGIN Mutex_CountUpTask */
-  /* Infinite loop */
-  for(;;)
-  {
-	  osMutexWait(UpDownMutexHandle,osWaitForever);
-	  // Once we have it, we can start counting Up
-	  // THe count up will be some random between 200 - 300 mS
-
-	if (mutex_protected_count<99)
-		mutex_protected_count++;
-	else
-		mutex_protected_count=0;
-	// Done writing, so give back the mutex
-	osMutexRelease(UpDownMutexHandle);
-    osDelay(random_wait(300));
-  }
-  /* USER CODE END Mutex_CountUpTask */
-}
-
-/* USER CODE BEGIN Header_Mutex_CountDownTask */
-/**
-* @brief Function implementing the Mutex_CountDown thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_Mutex_CountDownTask */
-void Mutex_CountDownTask(void *argument)
-{
-  /* USER CODE BEGIN Mutex_CountDownTask */
-  /* Infinite loop */
-  for(;;)
-  {
-	  osMutexWait(UpDownMutexHandle,osWaitForever);
-	  if (mutex_protected_count<1)
-	  		mutex_protected_count=99;
-	  	else
-	  		mutex_protected_count--;
-	  	// Done writing, so give back the mutex
-		osMutexRelease(UpDownMutexHandle);
-		osDelay(random_wait(200));
-  }
-  /* USER CODE END Mutex_CountDownTask */
-}
-
-/* USER CODE BEGIN Header_UpdateGlobDisplayProcess */
-/**
-* @brief Function implementing the UpdateGlobDisp thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_UpdateGlobDisplayProcess */
-void UpdateGlobDisplayProcess(void *argument)
-{
-  /* USER CODE BEGIN UpdateGlobDisplayProcess */
-  /* Infinite loop
-   * This just puts the value of the GlobalVariable on the
-   * right-most two-digits of the 7Seg Display */
-
-  for(;;)
-	  {
-	  MultiFunctionShield_Display_Two_Digits(mutex_protected_count);
-	  osDelay(150);	// The competing process to inc/dec are 200 - 300mS
-					// So show this a bit faster
-	  }
-  /* USER CODE END UpdateGlobDisplayProcess */
-}
-
-/* USER CODE BEGIN Header_ResetGlobalTask */
-/**
-* @brief Function implementing the ResetGlobal thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_ResetGlobalTask */
-void ResetGlobalTask(void *argument)
-{
-  /* USER CODE BEGIN ResetGlobalTask */
-  /* Infinite loop */
-  for(;;)
-		{
-		/* Pressing Button 3 sets us to ask for
-		 * the MUTEX protecting the global variable
-		 * When we get it, we can reset the global to the middle
-		 */
-		osSemaphoreAcquire(Button_3_SemaphoreHandle,osWaitForever);
-		// Now we have the semaphore because the button was pressed
-		osMutexWait(UpDownMutexHandle,osWaitForever);
-		mutex_protected_count = Protected_Count_Initial_Value ;
-		osDelay(5000);	// Wait for 5 seconds before making the resource available again
-		osMutexRelease(UpDownMutexHandle);
-		osDelay(1);
-		 }
-  /* USER CODE END ResetGlobalTask */
-}
-
-/* USER CODE BEGIN Header_StartDebounce */
-/**
-* @brief Function implementing the DebounceTask thread.
-* @param argument: Not used
-* @retval None
-*/
-/* USER CODE END Header_StartDebounce */
-void StartDebounce(void *argument)
-{
-	/* USER CODE BEGIN StartDebounce */
-	uint32_t buttons_in;  // placeholder
-	/* Infinite loop */
-	for(;;)
+void SW_SineWave(void * arguments)
 	{
-		/* We wait here until there's a notification
-		 * that there's been a button and delay for debounce.
-		 * Could have done the semaphore release directly from the
-		 * ISR, BUT there wouldn't have been a debounce.  We want
-		 * the debounce done in a thread-safe way -- not holding up the ISR.
-		 * Arguments are:  bits_to_clear_entry, bits_to_clear_exit
-		 * So clear all but the top (0xfffffff8) going in, then the bottom 3 (0x7) going out
-		 *
-		 * */
-		 xTaskNotifyWait( 0xfffffff8, 0x7, &buttons_in, portMAX_DELAY);
-	     osDelay(30);
-	     if (buttons_in & B1) { osSemaphoreRelease(Button_1_SemaphoreHandle); }
-	     if (buttons_in & B2) { osSemaphoreRelease(Button_2_SemaphoreHandle); }
-	     if (buttons_in & B3) { osSemaphoreRelease(Button_3_SemaphoreHandle); }
-	 }
-	/* USER CODE END StartDebounce */
-}
+	HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
+	while(true)
+		{
+		for(int sindex=0;sindex<=1000;sindex++)
+			{
+			  //HAL_DAC_SetValue(&hdac1, DAC_CHANNEL_1, DAC_ALIGN_12B_R,(uint32_t) sineLookup[sindex]);
+			  HAL_Delay(1);
+			}
 
-/* SW_Timer_Countdown function */
-void SW_Timer_Countdown(void *argument)
-{
-  /* USER CODE BEGIN SW_Timer_Countdown */
+		}
+	}
 
+
+void Start_the_DAC_DMA(void)
+	{
+	 //First stop it, just to be clean (if running)
+	HAL_DAC_Stop_DMA(&hdac1, DAC_CHANNEL_1);
+	// Just use the global
+
+	switch(points_to_use_in_a_cycle)
+		{
+		case ten:
+		   HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*) sineLookupTable_10_pts, 10,DAC_ALIGN_12B_R);
+			break;
+		case hundred:
+		   HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*) sineLookupTable_100_pts, 100,DAC_ALIGN_12B_R);
+			break;
+		case thousand:
+		   HAL_DAC_Start_DMA(&hdac1, DAC_CHANNEL_1, (uint32_t*) sineLookupTable_1000_pts, 1000,DAC_ALIGN_12B_R);
+			break;
+		}
+	}
+
+
+
+
+
+void change_points_per_cycle()
+	{
 	/*
-	 * When the timer expires, decrement the Count and Display it
-	 * on the 7-Seg Upper
+	 *  This routine just cycles thru the 3 different sets of points that
+	 *  can be used to generate a sine wave.
+	 *  The steps to change:
+	 *  1.) Change the variable that says what set we're on to the next one
+	 *  2.) Change the DMA Call to point to the address of that set
+	 *      and the new number of points
+	 *
+	 *  3.) Re-display the new set on the 7-Seg.  It'll show '10', or '100', or '1000'
 	 */
+	switch(points_to_use_in_a_cycle)
+		{
+		case ten:
+			points_to_use_in_a_cycle = hundred;
+			break;
+		case hundred:
+			points_to_use_in_a_cycle = thousand;
+			break;
+		case thousand:
+			points_to_use_in_a_cycle = ten;
+			break;
+		}
+		Start_the_DAC_DMA();
+		MultiFunctionShield_Display(points_to_use_in_a_cycle);
+	}
 
-	if (countdown_display == 0) countdown_display = 9;
-		else countdown_display--;
+// Callback: timer has rolled over
 
-	MultiFunctionShield_Single_Digit_Display(4, countdown_display);   //put it on the left
-	// MultiFunctionShield_Single_Digit_Display(2, -1);//blank the bottom two
+void change_sample_case()
+	{
+	current_sample_case++;
+	if (current_sample_case == NUM_CASES)
+		current_sample_case = 0 ;
+	// Now set the prescaler and the timer
+	HAL_TIM_Base_Stop_IT(&htim3); //Timer3 is the ADC Sample trigger
+	htim3.Init.Prescaler = sample_case[current_sample_case].Prescaler;
+	htim3.Init.Period    = sample_case[current_sample_case].Period;
+	HAL_TIM_Base_Init(&htim3);
+	HAL_TIM_Base_Start_IT(&htim3); //Timer3 is the ADC Sample trigger
+	display_current_sample_case(sample_case[current_sample_case].samples_per);
+	}
 
-  /* USER CODE END SW_Timer_Countdown */
+
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+	{
+	// When the DAC is being used, Button_2 is unavailable.
+	// The other two generate GPIO interrupts
+	// Don't spend much time in the ISR because there are other interrupts happening
+	switch(GPIO_Pin)
+	{
+	case Button_1_Pin:
+		change_points_per_cycle();
+		break;
+	case Button_3_Pin:
+		// Show the ADC Samples / Sec.  (Assumes the 1 Hz source signal)
+		change_sample_case();
+	  // MultiFunctionShield_Display(the_period);
+		break;
+	default:
+      __NOP();
+	}
+	for(int i=1;i<50;i++);
 }
 
-/**
-  * @brief  Period elapsed callback in non blocking mode
-  * @note   This function is called  when TIM3 interrupt took place, inside
-  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
-  * a global variable "uwTick" used as application time base.
-  * @param  htim : TIM handle
-  * @retval None
-  */
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc3) {
+	// When the ADC Buffer is filled, come here then launch the USART out... week 2 of the lab
+	//
+	// This is NOT currently used, because we're doing single interrupt for ADC-Trigger
+	// This could be used for a DMA-based buffer
+
+	adc_value = HAL_ADC_GetValue(hadc3);
+    __HAL_ADC_CLEAR_FLAG(hadc3, (ADC_FLAG_EOC | ADC_FLAG_EOS));
+	}
+
+
+// Callback: timer has rolled over
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  /* USER CODE BEGIN Callback 0 */
+	{
+	// Check which version of the timer triggered this callback and toggle the right LED
+	// This timer has to be here to cycle thru the 7-Seg LED displays
+    int int_part;
+	if (htim == &htim17 ) { MultiFunctionShield__ISRFunc(); }
+	if (htim == &htim3 )
+		{
+		// Kinda tricky printing a floating value with %float types
+		// don't print in this version of C
+		HAL_ADC_Start(&hadc3);
+		HAL_ADC_PollForConversion(&hadc3, 10000);
+		adc_value = HAL_ADC_GetValue(&hadc3);
+		float voltage = 3.3 / 4096 * adc_value;
+		float look = round(voltage * 4096) / 4096;
+		int_part = (int) look;
+		float frac = trunc((voltage - int_part)*1000);
+		printf("%d.%03d\n\r",int_part,(int) frac);
+		HAL_GPIO_WritePin(ADC_Sample_GPIO_Port, ADC_Sample_Pin, GPIO_PIN_SET);
+		for(int i=0;i<10;i++);	// Just to get a pulse
+		HAL_GPIO_WritePin(ADC_Sample_GPIO_Port, ADC_Sample_Pin, GPIO_PIN_RESET);
+		}
+	}
 
-  /* USER CODE END Callback 0 */
-  if (htim->Instance == TIM3) {
-    HAL_IncTick();
-  }
-  /* USER CODE BEGIN Callback 1 */
-  if (htim == &htim17 )
-  {
-	  MultiFunctionShield__ISRFunc();
-  }
 
-  /* USER CODE END Callback 1 */
-}
+
+void User_DMACompleteCallback(DMA_HandleTypeDef *hdac)
+	{
+	HAL_GPIO_WritePin(Period_Start_GPIO_Port, Period_Start_Pin, GPIO_PIN_SET);
+	for(int i=0;i<10;i++);	// Just to get a pulse
+	HAL_GPIO_WritePin(Period_Start_GPIO_Port, Period_Start_Pin, GPIO_PIN_RESET);
+	}
+
+/* USER CODE END 4 */
 
 /**
   * @brief  This function is executed in case of error occurrence.

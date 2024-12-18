@@ -58,7 +58,8 @@ const uint8_t SEGMENT_MINUS = 0xBF;
 const uint8_t SEGMENT_SELECT[] = {0xF1,0xF2,0xF4,0xF8};                               // Ziffernposition (gemeinsame Anode, LSB)
 volatile uint8_t ActDigit = 0;
 volatile uint8_t SEGMENT_VALUE[4];
-const uint8_t BLANK_OR_ZERO_FILL = SEGMENT_ZERO;
+// const uint8_t BLANK_OR_ZERO_FILL = SEGMENT_ZERO;
+const uint8_t BLANK_OR_ZERO_FILL = SEGMENT_BLANK;
 
 //static MultiFunctionShield *instance;
 
@@ -74,38 +75,15 @@ const uint8_t BLANK_OR_ZERO_FILL = SEGMENT_ZERO;
 */
 void MultiFunctionShield_Single_Digit_Display (int digit, int8_t value)
 	{
-	if (value <0) //then blank a digit
-		{
-		SEGMENT_VALUE[4-digit] = SEGMENT_BLANK;
-		}
-	else   //Normal value
-		{
-		value = (value & 0b1111) % 10 ;
-		if ((digit <=4 ) && (digit >=0))
-			SEGMENT_VALUE[4-digit] = SEGMENT_MAP [(uint8_t) (value % 10)];
-		else
-		{
-			SEGMENT_VALUE[0] = SEGMENT_MINUS;
-			SEGMENT_VALUE[1] = SEGMENT_MINUS;
-			SEGMENT_VALUE[2] = SEGMENT_MINUS;
-			SEGMENT_VALUE[3] = SEGMENT_MINUS;
-			}
-		}
-	}
-
-
-void MultiFunctionShield_Display_Two_Digits (int8_t value)
-// Just change the right-most 2 display digits.  Must be 0<= x <=99
-	{
-	if (value <0) {	//Display negative
-			SEGMENT_VALUE[2] = SEGMENT_MINUS;
-			SEGMENT_VALUE[3] = SEGMENT_MINUS;
-		}
+	value = (value & 0b1111) % 10 ;
+	if ((digit <=4 ) && (digit >=0))
+		SEGMENT_VALUE[4-digit] = SEGMENT_MAP [(uint8_t) (value % 10)];
 	else
-		{
-		value = value % 99; // Just in case it's bigger
-		MultiFunctionShield_Single_Digit_Display(2, (value / 10));
-		MultiFunctionShield_Single_Digit_Display(1, (value % 10));
+	{
+		SEGMENT_VALUE[0] = SEGMENT_MINUS;
+		SEGMENT_VALUE[1] = SEGMENT_MINUS;
+		SEGMENT_VALUE[2] = SEGMENT_MINUS;
+		SEGMENT_VALUE[3] = SEGMENT_MINUS;
 		}
 	}
 
@@ -272,6 +250,36 @@ void disp_adc_on_7seg(float inValue)
 	int to_disp = (tmpInt1 * 1000) + (tenth *100) + (hundredth * 10) + thousandth;
 	MultiFunctionShield_Display(to_disp);
 	set_Decimal_Point(4);
+
+	}
+
+
+
+void MultiFunctionShield_Display_Two_Digits (int8_t value)
+// Just change the right-most 2 display digits.  Must be 0<= x <=99
+	{
+	if (value <0) {	//Display negative
+			SEGMENT_VALUE[2] = SEGMENT_MINUS;
+			SEGMENT_VALUE[3] = SEGMENT_MINUS;
+		}
+	else
+		{
+		value = value % 99; // Just in case it's bigger
+		MultiFunctionShield_Single_Digit_Display(2, (value / 10));
+		MultiFunctionShield_Single_Digit_Display(1, (value % 10));
+		}
+	}
+
+
+
+
+void display_current_sample_case(int value)
+	{
+	// Shows:   S.  xx    Where xx is the samples / cycle
+	MultiFunctionShield_Clear();
+	MultiFunctionShield_Display(value);
+	// Decimal point is the MSB.  Negative true logic, so to turn on the decimal point, just AND with 0x7F
+	SEGMENT_VALUE[0] = (0x92 & 0x7f);
 
 	}
 

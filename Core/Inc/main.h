@@ -31,7 +31,8 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -41,6 +42,7 @@ extern "C" {
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
+
 
 /* USER CODE END EC */
 
@@ -59,8 +61,9 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define B1_Pin GPIO_PIN_13
 #define B1_GPIO_Port GPIOC
-#define LM35_IN_Pin GPIO_PIN_1
-#define LM35_IN_GPIO_Port GPIOC
+#define B1_EXTI_IRQn EXTI15_10_IRQn
+#define ADC_Sample_Pin GPIO_PIN_2
+#define ADC_Sample_GPIO_Port GPIOC
 #define Button_1_Pin GPIO_PIN_1
 #define Button_1_GPIO_Port GPIOA
 #define Button_1_EXTI_IRQn EXTI1_IRQn
@@ -68,9 +71,6 @@ void Error_Handler(void);
 #define USART_TX_GPIO_Port GPIOA
 #define USART_RX_Pin GPIO_PIN_3
 #define USART_RX_GPIO_Port GPIOA
-#define Button_2_Pin GPIO_PIN_4
-#define Button_2_GPIO_Port GPIOA
-#define Button_2_EXTI_IRQn EXTI4_IRQn
 #define LED_D1_Pin GPIO_PIN_5
 #define LED_D1_GPIO_Port GPIOA
 #define LED_D2_Pin GPIO_PIN_6
@@ -88,6 +88,10 @@ void Error_Handler(void);
 #define TMS_GPIO_Port GPIOA
 #define TCK_Pin GPIO_PIN_14
 #define TCK_GPIO_Port GPIOA
+#define Period_Start_Pin GPIO_PIN_10
+#define Period_Start_GPIO_Port GPIOC
+#define SWO_Pin GPIO_PIN_3
+#define SWO_GPIO_Port GPIOB
 #define SevenSeg_LATCH_Pin GPIO_PIN_5
 #define SevenSeg_LATCH_GPIO_Port GPIOB
 #define LED_D4_Pin GPIO_PIN_6

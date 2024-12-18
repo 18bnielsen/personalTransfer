@@ -2,7 +2,6 @@
 
 void MultiFunctionShield_WriteNumberToSegment(uint8_t digit);
 void MultiFunctionShield_Single_Digit_Display (int digit, int8_t value);
-void MultiFunctionShield_Display_Two_Digits (int8_t value);
 void MultiFunctionShield_Display (int16_t value);
 void MultiFunctionShield__ISRFunc(void);
 void MultiFunctionShield_Clear(void);
@@ -16,3 +15,5 @@ void set_Decimal_Point (int position);
 void disp_adc_on_7seg(float inValue);
 void MultiFunctionShield_Display_PWM(int16_t duty_cycle_percent);
 void Display_the_FULL (void);
+void MultiFunctionShield_Display_Two_Digits (int8_t value);
+void display_current_sample_case(int current_sample_case);

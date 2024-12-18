@@ -36,14 +36,14 @@
   * @brief This is the list of modules to be used in the HAL driver
   */
 #define HAL_MODULE_ENABLED
-/*#define HAL_ADC_MODULE_ENABLED   */
+#define HAL_ADC_MODULE_ENABLED
 /*#define HAL_CRYP_MODULE_ENABLED   */
 /*#define HAL_CAN_MODULE_ENABLED   */
 /*#define HAL_COMP_MODULE_ENABLED   */
 /*#define HAL_I2C_MODULE_ENABLED   */
 /*#define HAL_CRC_MODULE_ENABLED   */
 /*#define HAL_CRYP_MODULE_ENABLED   */
-/*#define HAL_DAC_MODULE_ENABLED   */
+#define HAL_DAC_MODULE_ENABLED
 /*#define HAL_DCMI_MODULE_ENABLED   */
 /*#define HAL_DMA2D_MODULE_ENABLED   */
 /*#define HAL_DFSDM_MODULE_ENABLED   */
@@ -209,7 +209,7 @@
 #define USE_HAL_CAN_REGISTER_CALLBACKS        0U
 #define USE_HAL_COMP_REGISTER_CALLBACKS       0U
 #define USE_HAL_CRYP_REGISTER_CALLBACKS       0U
-#define USE_HAL_DAC_REGISTER_CALLBACKS        0U
+#define USE_HAL_DAC_REGISTER_CALLBACKS        1U
 #define USE_HAL_DCMI_REGISTER_CALLBACKS       0U
 #define USE_HAL_DFSDM_REGISTER_CALLBACKS      0U
 #define USE_HAL_DMA2D_REGISTER_CALLBACKS      0U
